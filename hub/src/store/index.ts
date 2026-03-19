@@ -98,33 +98,33 @@ export class Store {
             return
         }
 
-        if (currentVersion === 1 && SCHEMA_VERSION === 2) {
+        let version = currentVersion
+
+        if (version === 1) {
             this.migrateFromV1ToV2()
-            this.setUserVersion(SCHEMA_VERSION)
-            return
+            version = 2
         }
 
-        if (currentVersion === 2 && SCHEMA_VERSION === 3) {
+        if (version === 2) {
             this.migrateFromV2ToV3()
-            this.setUserVersion(SCHEMA_VERSION)
-            return
+            version = 3
         }
 
-        if (currentVersion === 3 && SCHEMA_VERSION === 4) {
+        if (version === 3) {
             this.migrateFromV3ToV4()
-            this.setUserVersion(SCHEMA_VERSION)
-            return
+            version = 4
         }
 
-        if (currentVersion === 4 && SCHEMA_VERSION === 5) {
+        if (version === 4) {
             this.migrateFromV4ToV5()
-            this.setUserVersion(SCHEMA_VERSION)
-            return
+            version = 5
         }
 
-        if (currentVersion !== SCHEMA_VERSION) {
+        if (version !== SCHEMA_VERSION) {
             throw this.buildSchemaMismatchError(currentVersion)
         }
+
+        this.setUserVersion(SCHEMA_VERSION)
 
         this.assertRequiredTablesPresent()
     }
