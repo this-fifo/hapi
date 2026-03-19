@@ -4,7 +4,7 @@ import { AgentState, SessionModel } from '@/api/types';
 import { EnhancedMode, PermissionMode } from './loop';
 import { MessageQueue2 } from '@/utils/MessageQueue2';
 import { hashObject } from '@/utils/deterministicJson';
-import { extractSDKMetadataAsync } from '@/claude/sdk/metadataExtractor';
+
 import { parseSpecialCommand } from '@/parsers/specialCommands';
 import { getEnvironmentInfo } from '@/ui/doctor';
 import { startHappyServer } from '@/claude/utils/startHappyServer';
@@ -56,22 +56,6 @@ export async function runClaude(options: StartOptions = {}): Promise<void> {
         model: initialModel ?? undefined
     });
     logger.debug(`Session created: ${sessionInfo.id}`);
-
-    // Extract SDK metadata in background and update session when ready
-    extractSDKMetadataAsync(async (sdkMetadata) => {
-        logger.debug('[start] SDK metadata extracted, updating session:', sdkMetadata);
-        try {
-            // Update session metadata with tools and slash commands
-            session.updateMetadata((currentMetadata) => ({
-                ...currentMetadata,
-                tools: sdkMetadata.tools,
-                slashCommands: sdkMetadata.slashCommands
-            }));
-            logger.debug('[start] Session metadata updated with SDK capabilities');
-        } catch (error) {
-            logger.debug('[start] Failed to update session metadata:', error);
-        }
-    });
 
     // Start HAPI MCP server
     const happyServer = await startHappyServer(session);
