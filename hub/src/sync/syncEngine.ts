@@ -12,6 +12,7 @@ import type { Server } from 'socket.io'
 import type { Store } from '../store'
 import type { RpcRegistry } from '../socket/rpcRegistry'
 import type { SSEManager } from '../sse/sseManager'
+import { configuration } from '../configuration'
 import { EventPublisher, type SyncEventListener } from './eventPublisher'
 import { MachineCache, type Machine } from './machineCache'
 import { MessageService } from './messageService'
@@ -49,6 +50,8 @@ export class SyncEngine {
     private readonly messageService: MessageService
     private readonly rpcGateway: RpcGateway
     private inactivityTimer: NodeJS.Timeout | null = null
+    private archiveTimer: NodeJS.Timeout | null = null
+    private archiveStartupTimer: NodeJS.Timeout | null = null
 
     constructor(
         store: Store,
@@ -63,6 +66,9 @@ export class SyncEngine {
         this.rpcGateway = new RpcGateway(io, rpcRegistry)
         this.reloadAll()
         this.inactivityTimer = setInterval(() => this.expireInactive(), 5_000)
+        // Archive maintenance: run shortly after startup, then hourly.
+        this.archiveStartupTimer = setTimeout(() => this.archiveTick(), 5_000)
+        this.archiveTimer = setInterval(() => this.archiveTick(), 60 * 60 * 1000)
     }
 
     stop(): void {
@@ -70,6 +76,45 @@ export class SyncEngine {
             clearInterval(this.inactivityTimer)
             this.inactivityTimer = null
         }
+        if (this.archiveStartupTimer) {
+            clearTimeout(this.archiveStartupTimer)
+            this.archiveStartupTimer = null
+        }
+        if (this.archiveTimer) {
+            clearInterval(this.archiveTimer)
+            this.archiveTimer = null
+        }
+    }
+
+    private archiveTick(): void {
+        const idleDays = configuration.autoArchiveIdleDays
+        const deleteDays = configuration.autoDeleteArchivedDays
+        if ((!idleDays || idleDays <= 0) && (!deleteDays || deleteDays <= 0)) return
+        const namespaces = new Set(this.sessionCache.getSessions().map((s) => s.namespace))
+        for (const ns of namespaces) {
+            if (idleDays && idleDays > 0) {
+                this.sessionCache.bulkArchiveIdle(ns, idleDays)
+            }
+            if (deleteDays && deleteDays > 0) {
+                this.sessionCache.deleteArchivedOlderThan(ns, deleteDays)
+            }
+        }
+    }
+
+    softArchiveSession(sessionId: string): boolean {
+        return this.sessionCache.softArchiveSession(sessionId)
+    }
+
+    unarchiveSession(sessionId: string): boolean {
+        return this.sessionCache.unarchiveSession(sessionId)
+    }
+
+    bulkArchiveIdle(namespace: string, idleDays: number): number {
+        return this.sessionCache.bulkArchiveIdle(namespace, idleDays)
+    }
+
+    deleteArchivedOlderThan(namespace: string, archivedDays: number): number {
+        return this.sessionCache.deleteArchivedOlderThan(namespace, archivedDays)
     }
 
     subscribe(listener: SyncEventListener): () => void {
@@ -93,8 +138,8 @@ export class SyncEngine {
         return this.sessionCache.getSessions()
     }
 
-    getSessionsByNamespace(namespace: string): Session[] {
-        return this.sessionCache.getSessionsByNamespace(namespace)
+    getSessionsByNamespace(namespace: string, opts?: { includeArchived?: boolean }): Session[] {
+        return this.sessionCache.getSessionsByNamespace(namespace, opts)
     }
 
     getSession(sessionId: string): Session | undefined {
@@ -261,7 +306,7 @@ export class SyncEngine {
         await this.rpcGateway.abortSession(sessionId)
     }
 
-    async archiveSession(sessionId: string): Promise<void> {
+    async stopSession(sessionId: string): Promise<void> {
         await this.rpcGateway.killSession(sessionId)
         this.handleSessionEnd({ sid: sessionId, time: Date.now() })
     }
@@ -314,9 +359,10 @@ export class SyncEngine {
         yolo?: boolean,
         sessionType?: 'simple' | 'worktree',
         worktreeName?: string,
-        resumeSessionId?: string
+        resumeSessionId?: string,
+        existingHapiSessionId?: string
     ): Promise<{ type: 'success'; sessionId: string } | { type: 'error'; message: string }> {
-        return await this.rpcGateway.spawnSession(machineId, directory, agent, model, modelReasoningEffort, yolo, sessionType, worktreeName, resumeSessionId)
+        return await this.rpcGateway.spawnSession(machineId, directory, agent, model, modelReasoningEffort, yolo, sessionType, worktreeName, resumeSessionId, existingHapiSessionId)
     }
 
     async resumeSession(sessionId: string, namespace: string): Promise<ResumeSessionResult> {
@@ -385,7 +431,9 @@ export class SyncEngine {
             undefined,
             undefined,
             undefined,
-            resumeToken
+            undefined,
+            resumeToken,
+            access.sessionId
         )
 
         if (spawnResult.type !== 'success') {

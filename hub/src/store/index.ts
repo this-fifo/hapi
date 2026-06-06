@@ -22,7 +22,7 @@ export { PushStore } from './pushStore'
 export { SessionStore } from './sessionStore'
 export { UserStore } from './userStore'
 
-const SCHEMA_VERSION: number = 5
+const SCHEMA_VERSION: number = 6
 const REQUIRED_TABLES = [
     'sessions',
     'machines',
@@ -120,6 +120,11 @@ export class Store {
             version = 5
         }
 
+        if (version === 5) {
+            this.migrateFromV5ToV6()
+            version = 6
+        }
+
         if (version !== SCHEMA_VERSION) {
             throw this.buildSchemaMismatchError(currentVersion)
         }
@@ -149,7 +154,8 @@ export class Store {
                 team_state_updated_at INTEGER,
                 active INTEGER DEFAULT 0,
                 active_at INTEGER,
-                seq INTEGER DEFAULT 0
+                seq INTEGER DEFAULT 0,
+                archived_at INTEGER
             );
             CREATE INDEX IF NOT EXISTS idx_sessions_tag ON sessions(tag);
             CREATE INDEX IF NOT EXISTS idx_sessions_tag_namespace ON sessions(tag, namespace);
@@ -309,6 +315,13 @@ export class Store {
         const columns = this.getSessionColumnNames()
         if (!columns.has('model')) {
             this.db.exec('ALTER TABLE sessions ADD COLUMN model TEXT')
+        }
+    }
+
+    private migrateFromV5ToV6(): void {
+        const columns = this.getSessionColumnNames()
+        if (!columns.has('archived_at')) {
+            this.db.exec('ALTER TABLE sessions ADD COLUMN archived_at INTEGER')
         }
     }
 

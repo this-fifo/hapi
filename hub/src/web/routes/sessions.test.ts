@@ -30,7 +30,8 @@ function createSession(overrides?: Partial<Session>): Session {
         thinkingAt: 1,
         model: 'gpt-5.4',
         permissionMode: 'default',
-        collaborationMode: 'default'
+        collaborationMode: 'default',
+        archivedAt: null
     }
 
     return {

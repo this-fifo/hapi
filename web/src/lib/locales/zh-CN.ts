@@ -41,6 +41,12 @@ export default {
   // Sessions page
   'sessions.count': '{n} 个会话，{m} 个项目',
   'sessions.new': '新建会话',
+  'sessions.showArchived': '显示已归档',
+  'sessions.bucket.active': '活跃',
+  'sessions.bucket.recent': '最近 · 7 天内',
+  'sessions.bucket.thisMonth': '本月 · 7-30 天',
+  'sessions.bucket.older': '更早',
+  'sessions.bucket.archived': '已归档',
 
   // Session list
   'session.item.path': '路径',
@@ -60,9 +66,16 @@ export default {
 
   // Session actions
   'session.action.rename': '重命名',
+  'session.action.stop': '停止并搁置',
   'session.action.archive': '归档',
-  'session.action.delete': '删除',
+  'session.action.unarchive': '取消归档',
+  'session.action.delete': '永久删除',
   'session.action.copy': '复制',
+
+  'toast.archived.title': '已归档',
+  'toast.archived.undo': '撤销',
+  'toast.unarchived.title': '已取消归档',
+  'toast.unarchived.undo': '撤销',
 
   // Dialogs
   'dialog.rename.title': '重命名会话',
@@ -71,14 +84,14 @@ export default {
   'dialog.rename.saving': '保存中…',
   'dialog.rename.error': '重命名失败，请重试。',
 
-  'dialog.archive.title': '归档会话',
-  'dialog.archive.description': '确定要归档 "{name}" 吗？这将断开活动会话。',
-  'dialog.archive.confirm': '归档',
-  'dialog.archive.confirming': '归档中…',
+  'dialog.stop.title': '停止会话',
+  'dialog.stop.description': '停止 "{name}" 并断开正在运行的进程？对话历史将保留。',
+  'dialog.stop.confirm': '停止',
+  'dialog.stop.confirming': '停止中…',
 
   'dialog.delete.title': '删除会话',
-  'dialog.delete.description': '确定要删除 "{name}" 吗？此操作无法撤销。',
-  'dialog.delete.confirm': '删除',
+  'dialog.delete.description': '永久删除 "{name}" 及其所有消息？此操作无法撤销。',
+  'dialog.delete.confirm': '永久删除',
   'dialog.delete.confirming': '删除中…',
   'dialog.error.default': '操作失败，请重试。',
 
@@ -263,6 +276,22 @@ export default {
   'settings.voice.title': '语音助手',
   'settings.voice.language': '语音语言',
   'settings.voice.autoDetect': '自动检测',
+  'settings.maintenance.title': '维护',
+  'settings.maintenance.autoArchiveIdle': '自动归档闲置会话',
+  'settings.maintenance.autoDeleteArchived': '自动删除已归档会话',
+  'settings.maintenance.daysSuffix': '天',
+  'settings.maintenance.off': '关闭',
+  'settings.maintenance.dbSize': '数据库大小',
+  'settings.maintenance.activeCount': '活跃会话',
+  'settings.maintenance.archivedCount': '已归档会话',
+  'settings.maintenance.archiveIdleNow': '立即归档闲置',
+  'settings.maintenance.archivedToast': '已归档 {n} 个会话',
+  'settings.maintenance.archiveFailed': '归档失败',
+  'settings.maintenance.vacuum': '压缩 (VACUUM)',
+  'settings.maintenance.vacuumDone': '已压缩',
+  'settings.maintenance.vacuumDoneBody': '新大小：{size}',
+  'settings.maintenance.vacuumFailed': 'VACUUM 失败',
+
   'settings.about.title': '关于',
   'settings.about.website': '官方网站',
   'settings.about.appVersion': '应用版本',

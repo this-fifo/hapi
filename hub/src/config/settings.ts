@@ -18,6 +18,9 @@ export interface Settings {
     listenPort?: number
     publicUrl?: string
     corsOrigins?: string[]
+    // Maintenance / archive policy (user-configurable via Settings UI)
+    autoArchiveIdleDays?: number | null
+    autoDeleteArchivedDays?: number | null
     // Legacy field names (for migration, read-only)
     webappHost?: string
     webappPort?: number

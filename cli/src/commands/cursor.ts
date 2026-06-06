@@ -18,6 +18,7 @@ export const cursorCommand: CommandDefinition = {
                 permissionMode?: CursorPermissionMode
                 resumeSessionId?: string
                 model?: string
+                existingSessionId?: string
             } = {}
             const unknownArgs: string[] = []
 
@@ -68,6 +69,12 @@ export const cursorCommand: CommandDefinition = {
                         throw new Error('Invalid --hapi-starting-mode (expected local or remote)')
                     }
                     continue
+                } else if (arg === '--hapi-session-id') {
+                    const value = commandArgs[++i]
+                    if (!value) {
+                        throw new Error('Missing --hapi-session-id value')
+                    }
+                    options.existingSessionId = value
                 } else {
                     unknownArgs.push(arg)
                 }

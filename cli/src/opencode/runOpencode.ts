@@ -19,6 +19,7 @@ export async function runOpencode(opts: {
     startingMode?: 'local' | 'remote';
     permissionMode?: PermissionMode;
     resumeSessionId?: string;
+    existingSessionId?: string;
 } = {}): Promise<void> {
     const workingDirectory = getInvokedCwd();
     const startedBy = opts.startedBy ?? 'terminal';
@@ -38,6 +39,7 @@ export async function runOpencode(opts: {
         flavor: 'opencode',
         startedBy,
         workingDirectory,
+        existingSessionId: opts.existingSessionId,
         agentState: initialState
     });
 

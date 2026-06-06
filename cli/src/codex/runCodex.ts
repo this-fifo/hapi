@@ -22,6 +22,7 @@ export async function runCodex(opts: {
     resumeSessionId?: string;
     model?: string;
     modelReasoningEffort?: string;
+    existingSessionId?: string;
 }): Promise<void> {
     const workingDirectory = getInvokedCwd();
     const startedBy = opts.startedBy ?? 'terminal';
@@ -35,6 +36,7 @@ export async function runCodex(opts: {
         flavor: 'codex',
         startedBy,
         workingDirectory,
+        existingSessionId: opts.existingSessionId,
         agentState: state,
         model: opts.model
     });

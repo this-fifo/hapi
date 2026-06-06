@@ -7,6 +7,7 @@ import { SessionActionMenu } from '@/components/SessionActionMenu'
 import { RenameSessionDialog } from '@/components/RenameSessionDialog'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { getSessionModelLabel } from '@/lib/sessionModelLabel'
+import { useToast } from '@/lib/toast-context'
 import { useTranslation } from '@/lib/use-translation'
 
 function getSessionTitle(session: Session): string {
@@ -78,10 +79,18 @@ export function SessionHeader(props: {
     const menuId = useId()
     const menuAnchorRef = useRef<HTMLButtonElement | null>(null)
     const [renameOpen, setRenameOpen] = useState(false)
-    const [archiveOpen, setArchiveOpen] = useState(false)
+    const [stopOpen, setStopOpen] = useState(false)
     const [deleteOpen, setDeleteOpen] = useState(false)
+    const { addToast } = useToast()
 
-    const { archiveSession, renameSession, deleteSession, isPending } = useSessionActions(
+    const {
+        stopSession,
+        archiveSession,
+        unarchiveSession,
+        renameSession,
+        deleteSession,
+        isPending
+    } = useSessionActions(
         api,
         session.id,
         session.metadata?.flavor ?? null
@@ -90,6 +99,42 @@ export function SessionHeader(props: {
     const handleDelete = async () => {
         await deleteSession()
         onSessionDeleted?.()
+    }
+
+    const handleArchive = async () => {
+        try {
+            await archiveSession()
+            addToast({
+                title: t('toast.archived.title'),
+                body: title,
+                sessionId: '',
+                url: '',
+                action: {
+                    label: t('toast.archived.undo'),
+                    onClick: () => { void unarchiveSession() }
+                }
+            })
+        } catch {
+            // mutation surfaces its own error path
+        }
+    }
+
+    const handleUnarchive = async () => {
+        try {
+            await unarchiveSession()
+            addToast({
+                title: t('toast.unarchived.title'),
+                body: title,
+                sessionId: '',
+                url: '',
+                action: {
+                    label: t('toast.unarchived.undo'),
+                    onClick: () => { void archiveSession() }
+                }
+            })
+        } catch {
+            // see above
+        }
     }
 
     const handleMenuToggle = () => {
@@ -182,8 +227,11 @@ export function SessionHeader(props: {
                 isOpen={menuOpen}
                 onClose={() => setMenuOpen(false)}
                 sessionActive={session.active}
+                sessionArchived={session.archivedAt !== null}
                 onRename={() => setRenameOpen(true)}
-                onArchive={() => setArchiveOpen(true)}
+                onStop={() => setStopOpen(true)}
+                onArchive={() => { void handleArchive() }}
+                onUnarchive={() => { void handleUnarchive() }}
                 onDelete={() => setDeleteOpen(true)}
                 anchorPoint={menuAnchorPoint}
                 menuId={menuId}
@@ -198,13 +246,13 @@ export function SessionHeader(props: {
             />
 
             <ConfirmDialog
-                isOpen={archiveOpen}
-                onClose={() => setArchiveOpen(false)}
-                title={t('dialog.archive.title')}
-                description={t('dialog.archive.description', { name: title })}
-                confirmLabel={t('dialog.archive.confirm')}
-                confirmingLabel={t('dialog.archive.confirming')}
-                onConfirm={archiveSession}
+                isOpen={stopOpen}
+                onClose={() => setStopOpen(false)}
+                title={t('dialog.stop.title')}
+                description={t('dialog.stop.description', { name: title })}
+                confirmLabel={t('dialog.stop.confirm')}
+                confirmingLabel={t('dialog.stop.confirming')}
+                onConfirm={stopSession}
                 isPending={isPending}
                 destructive
             />

@@ -1,11 +1,17 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
+export type ToastAction = {
+    label: string
+    onClick: () => void
+}
+
 export type Toast = {
     id: string
     title: string
     body: string
     sessionId: string
     url: string
+    action?: ToastAction
 }
 
 export type ToastContextValue = {

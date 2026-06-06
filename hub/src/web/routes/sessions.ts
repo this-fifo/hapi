@@ -52,8 +52,9 @@ export function createSessionsRoutes(getSyncEngine: () => SyncEngine | null): Ho
 
         const getPendingCount = (s: Session) => s.agentState?.requests ? Object.keys(s.agentState.requests).length : 0
 
+        const includeArchived = c.req.query('showArchived') === '1' || c.req.query('showArchived') === 'true'
         const namespace = c.get('namespace')
-        const sessions = engine.getSessionsByNamespace(namespace)
+        const sessions = engine.getSessionsByNamespace(namespace, { includeArchived })
             .sort((a, b) => {
                 // Active sessions first
                 if (a.active !== b.active) {
@@ -192,7 +193,7 @@ export function createSessionsRoutes(getSyncEngine: () => SyncEngine | null): Ho
         return c.json({ ok: true })
     })
 
-    app.post('/sessions/:id/archive', async (c) => {
+    app.post('/sessions/:id/stop', async (c) => {
         const engine = requireSyncEngine(c, getSyncEngine)
         if (engine instanceof Response) {
             return engine
@@ -203,8 +204,72 @@ export function createSessionsRoutes(getSyncEngine: () => SyncEngine | null): Ho
             return sessionResult
         }
 
-        await engine.archiveSession(sessionResult.sessionId)
+        await engine.stopSession(sessionResult.sessionId)
         return c.json({ ok: true })
+    })
+
+    app.post('/sessions/:id/archive', async (c) => {
+        const engine = requireSyncEngine(c, getSyncEngine)
+        if (engine instanceof Response) {
+            return engine
+        }
+
+        const sessionResult = requireSessionFromParam(c, engine)
+        if (sessionResult instanceof Response) {
+            return sessionResult
+        }
+
+        if (sessionResult.session.active) {
+            return c.json({ error: 'Cannot archive an active session. Stop it first.', code: 'session_active' }, 409)
+        }
+
+        try {
+            engine.softArchiveSession(sessionResult.sessionId)
+            return c.json({ ok: true })
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to archive session'
+            return c.json({ error: message }, 500)
+        }
+    })
+
+    app.post('/sessions/:id/unarchive', async (c) => {
+        const engine = requireSyncEngine(c, getSyncEngine)
+        if (engine instanceof Response) {
+            return engine
+        }
+
+        const sessionResult = requireSessionFromParam(c, engine)
+        if (sessionResult instanceof Response) {
+            return sessionResult
+        }
+
+        try {
+            engine.unarchiveSession(sessionResult.sessionId)
+            return c.json({ ok: true })
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to unarchive session'
+            return c.json({ error: message }, 500)
+        }
+    })
+
+    app.post('/sessions/bulk-archive', async (c) => {
+        const engine = requireSyncEngine(c, getSyncEngine)
+        if (engine instanceof Response) {
+            return engine
+        }
+
+        const body = await c.req.json().catch(() => ({}))
+        const parsed = z.object({
+            olderThanDays: z.number().int().positive().optional()
+        }).safeParse(body)
+        if (!parsed.success) {
+            return c.json({ error: 'Invalid body' }, 400)
+        }
+        const olderThanDays = parsed.data.olderThanDays ?? 30
+        const namespace = c.get('namespace')
+
+        const archived = engine.bulkArchiveIdle(namespace, olderThanDays)
+        return c.json({ ok: true, archived })
     })
 
     app.post('/sessions/:id/switch', async (c) => {

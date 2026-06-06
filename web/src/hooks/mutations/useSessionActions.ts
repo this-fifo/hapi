@@ -13,7 +13,9 @@ export function useSessionActions(
     codexCollaborationModeSupported?: boolean
 ): {
     abortSession: () => Promise<void>
+    stopSession: () => Promise<void>
     archiveSession: () => Promise<void>
+    unarchiveSession: () => Promise<void>
     switchSession: () => Promise<void>
     setPermissionMode: (mode: PermissionMode) => Promise<void>
     setCollaborationMode: (mode: CodexCollaborationMode) => Promise<void>
@@ -40,12 +42,32 @@ export function useSessionActions(
         onSuccess: () => void invalidateSession(),
     })
 
+    const stopMutation = useMutation({
+        mutationFn: async () => {
+            if (!api || !sessionId) {
+                throw new Error('Session unavailable')
+            }
+            await api.stopSession(sessionId)
+        },
+        onSuccess: () => void invalidateSession(),
+    })
+
     const archiveMutation = useMutation({
         mutationFn: async () => {
             if (!api || !sessionId) {
                 throw new Error('Session unavailable')
             }
             await api.archiveSession(sessionId)
+        },
+        onSuccess: () => void invalidateSession(),
+    })
+
+    const unarchiveMutation = useMutation({
+        mutationFn: async () => {
+            if (!api || !sessionId) {
+                throw new Error('Session unavailable')
+            }
+            await api.unarchiveSession(sessionId)
         },
         onSuccess: () => void invalidateSession(),
     })
@@ -126,7 +148,9 @@ export function useSessionActions(
 
     return {
         abortSession: abortMutation.mutateAsync,
+        stopSession: stopMutation.mutateAsync,
         archiveSession: archiveMutation.mutateAsync,
+        unarchiveSession: unarchiveMutation.mutateAsync,
         switchSession: switchMutation.mutateAsync,
         setPermissionMode: permissionMutation.mutateAsync,
         setCollaborationMode: collaborationMutation.mutateAsync,
@@ -134,7 +158,9 @@ export function useSessionActions(
         renameSession: renameMutation.mutateAsync,
         deleteSession: deleteMutation.mutateAsync,
         isPending: abortMutation.isPending
+            || stopMutation.isPending
             || archiveMutation.isPending
+            || unarchiveMutation.isPending
             || switchMutation.isPending
             || permissionMutation.isPending
             || collaborationMutation.isPending

@@ -19,6 +19,7 @@ export type SessionSummary = {
     todoProgress: { completed: number; total: number } | null
     pendingRequestsCount: number
     model: string | null
+    archivedAt: number | null
 }
 
 export function toSessionSummary(session: Session): SessionSummary {
@@ -47,6 +48,7 @@ export function toSessionSummary(session: Session): SessionSummary {
         metadata,
         todoProgress,
         pendingRequestsCount,
-        model: session.model
+        model: session.model,
+        archivedAt: session.archivedAt
     }
 }

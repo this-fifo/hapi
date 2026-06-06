@@ -15,6 +15,7 @@ export const geminiCommand: CommandDefinition = {
                 startingMode?: 'local' | 'remote'
                 permissionMode?: GeminiPermissionMode
                 model?: string
+                existingSessionId?: string
             } = {}
 
             for (let i = 0; i < commandArgs.length; i++) {
@@ -28,6 +29,12 @@ export const geminiCommand: CommandDefinition = {
                     } else {
                         throw new Error('Invalid --hapi-starting-mode (expected local or remote)')
                     }
+                } else if (arg === '--hapi-session-id') {
+                    const value = commandArgs[++i]
+                    if (!value) {
+                        throw new Error('Missing --hapi-session-id value')
+                    }
+                    options.existingSessionId = value
                 } else if (arg === '--yolo') {
                     options.permissionMode = 'yolo'
                 } else if (arg === '--model') {

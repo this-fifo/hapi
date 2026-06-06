@@ -26,6 +26,7 @@ export async function runCursor(opts: {
     permissionMode?: PermissionMode;
     resumeSessionId?: string;
     model?: string;
+    existingSessionId?: string;
 }): Promise<void> {
     const workingDirectory = getInvokedCwd();
     const startedBy = opts.startedBy ?? 'terminal';
@@ -39,6 +40,7 @@ export async function runCursor(opts: {
         flavor: 'cursor',
         startedBy,
         workingDirectory,
+        existingSessionId: opts.existingSessionId,
         agentState: state,
         model: opts.model
     });

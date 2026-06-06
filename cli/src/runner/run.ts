@@ -190,7 +190,6 @@ export async function startRunner(): Promise<void> {
       }
     };
 
-    // Spawn a new session (sessionId reserved for future --resume functionality)
     const spawnSession = async (options: SpawnSessionOptions): Promise<SpawnSessionResult> => {
       logger.debugLargeJson('[RUNNER RUN] Spawning session', options);
 
@@ -359,6 +358,9 @@ export async function startRunner(): Promise<void> {
                 args.push('--resume', options.resumeSessionId);
             }
         }
+        if (sessionId) {
+            args.push('--hapi-session-id', sessionId);
+        }
         args.push('--hapi-starting-mode', 'remote', '--started-by', 'runner');
         if (options.model && agent !== 'opencode') {
           args.push('--model', options.model);
@@ -370,7 +372,6 @@ export async function startRunner(): Promise<void> {
           args.push('--yolo');
         }
 
-        // sessionId reserved for future use
         const MAX_TAIL_CHARS = 4000;
         let stderrTail = '';
         const appendTail = (current: string, chunk: Buffer | string): string => {

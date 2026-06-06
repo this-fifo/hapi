@@ -21,6 +21,7 @@ export async function runGemini(opts: {
     startingMode?: 'local' | 'remote';
     permissionMode?: PermissionMode;
     model?: string;
+    existingSessionId?: string;
 } = {}): Promise<void> {
     const workingDirectory = getInvokedCwd();
     const startedBy = opts.startedBy ?? 'terminal';
@@ -45,6 +46,7 @@ export async function runGemini(opts: {
         flavor: 'gemini',
         startedBy,
         workingDirectory,
+        existingSessionId: opts.existingSessionId,
         agentState: initialState,
         model: persistedModel
     });

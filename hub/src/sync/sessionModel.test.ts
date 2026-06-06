@@ -129,6 +129,97 @@ describe('session model', () => {
         expect(cache.getSession(session.id)?.collaborationMode).toBe('default')
     })
 
+    it('soft-archives a session and excludes it from default listings', () => {
+        const store = new Store(':memory:')
+        const events: SyncEvent[] = []
+        const cache = new SessionCache(store, createPublisher(events))
+
+        const session = cache.getOrCreateSession(
+            'session-archive',
+            { path: '/tmp/project', host: 'localhost', flavor: 'claude' },
+            null,
+            'default'
+        )
+
+        const ok = cache.softArchiveSession(session.id)
+        expect(ok).toBe(true)
+        expect(cache.getSession(session.id)?.archivedAt).not.toBeNull()
+
+        const visible = cache.getSessionsByNamespace('default')
+        expect(visible.find((s) => s.id === session.id)).toBeUndefined()
+
+        const all = cache.getSessionsByNamespace('default', { includeArchived: true })
+        expect(all.find((s) => s.id === session.id)).toBeDefined()
+    })
+
+    it('unarchive restores the session to the visible list', () => {
+        const store = new Store(':memory:')
+        const events: SyncEvent[] = []
+        const cache = new SessionCache(store, createPublisher(events))
+
+        const session = cache.getOrCreateSession(
+            'session-unarchive',
+            { path: '/tmp/project', host: 'localhost', flavor: 'claude' },
+            null,
+            'default'
+        )
+
+        cache.softArchiveSession(session.id)
+        const okUnarchive = cache.unarchiveSession(session.id)
+        expect(okUnarchive).toBe(true)
+        expect(cache.getSession(session.id)?.archivedAt).toBeNull()
+        const visible = cache.getSessionsByNamespace('default')
+        expect(visible.find((s) => s.id === session.id)).toBeDefined()
+    })
+
+    it('refuses to archive an active session', () => {
+        const store = new Store(':memory:')
+        const events: SyncEvent[] = []
+        const cache = new SessionCache(store, createPublisher(events))
+
+        const session = cache.getOrCreateSession(
+            'session-active-archive',
+            { path: '/tmp/project', host: 'localhost', flavor: 'claude' },
+            null,
+            'default'
+        )
+        // Mark active via heartbeat
+        cache.handleSessionAlive({ sid: session.id, time: Date.now(), thinking: false })
+
+        expect(() => cache.softArchiveSession(session.id)).toThrow()
+    })
+
+    it('bulkArchiveIdle only archives inactive sessions older than threshold', () => {
+        const store = new Store(':memory:')
+        const events: SyncEvent[] = []
+        const cache = new SessionCache(store, createPublisher(events))
+
+        const oldSession = cache.getOrCreateSession(
+            'session-old',
+            { path: '/tmp/project', host: 'localhost', flavor: 'claude' },
+            null,
+            'default'
+        )
+        // Backdate updated_at by 40 days directly via the store
+        const fortyDaysAgo = Date.now() - 40 * 86_400_000
+        ;(store as unknown as { db: { exec: (sql: string) => void } }).db.exec(
+            `UPDATE sessions SET updated_at = ${fortyDaysAgo} WHERE id = '${oldSession.id}'`
+        )
+        cache.refreshSession(oldSession.id)
+
+        const recentSession = cache.getOrCreateSession(
+            'session-recent',
+            { path: '/tmp/project', host: 'localhost', flavor: 'claude' },
+            null,
+            'default'
+        )
+
+        const archived = cache.bulkArchiveIdle('default', 30)
+        expect(archived).toBe(1)
+        expect(cache.getSession(oldSession.id)?.archivedAt).not.toBeNull()
+        expect(cache.getSession(recentSession.id)?.archivedAt).toBeNull()
+    })
+
     it('passes the stored model when respawning a resumed session', async () => {
         const store = new Store(':memory:')
         const engine = new SyncEngine(
@@ -161,13 +252,23 @@ describe('session model', () => {
             engine.handleMachineAlive({ machineId: 'machine-1', time: Date.now() })
 
             let capturedModel: string | undefined
+            let capturedResumeSessionId: string | undefined
+            let capturedExistingHapiSessionId: string | undefined
             ;(engine as any).rpcGateway.spawnSession = async (
                 _machineId: string,
                 _directory: string,
                 _agent: string,
-                model?: string
+                model?: string,
+                _modelReasoningEffort?: string,
+                _yolo?: boolean,
+                _sessionType?: string,
+                _worktreeName?: string,
+                resumeSessionId?: string,
+                existingHapiSessionId?: string
             ) => {
                 capturedModel = model
+                capturedResumeSessionId = resumeSessionId
+                capturedExistingHapiSessionId = existingHapiSessionId
                 return { type: 'success', sessionId: session.id }
             }
             ;(engine as any).waitForSessionActive = async () => true
@@ -176,6 +277,8 @@ describe('session model', () => {
 
             expect(result).toEqual({ type: 'success', sessionId: session.id })
             expect(capturedModel).toBe('gpt-5.4')
+            expect(capturedResumeSessionId).toBe('codex-thread-1')
+            expect(capturedExistingHapiSessionId).toBe(session.id)
         } finally {
             engine.stop()
         }

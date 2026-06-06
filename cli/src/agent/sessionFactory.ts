@@ -21,6 +21,7 @@ export type SessionBootstrapOptions = {
     startedBy?: SessionStartedBy
     workingDirectory?: string
     tag?: string
+    existingSessionId?: string
     agentState?: AgentState | null
     model?: string
     metadataOverrides?: Partial<Metadata>
@@ -129,6 +130,7 @@ export async function bootstrapSession(options: SessionBootstrapOptions): Promis
 
     const sessionInfo = await api.getOrCreateSession({
         tag: sessionTag,
+        existingSessionId: options.existingSessionId,
         metadata,
         state: agentState,
         model: options.model

@@ -13,8 +13,11 @@ type SessionActionMenuProps = {
     isOpen: boolean
     onClose: () => void
     sessionActive: boolean
+    sessionArchived: boolean
     onRename: () => void
+    onStop: () => void
     onArchive: () => void
+    onUnarchive: () => void
     onDelete: () => void
     anchorPoint: { x: number; y: number }
     menuId?: string
@@ -96,8 +99,11 @@ export function SessionActionMenu(props: SessionActionMenuProps) {
         isOpen,
         onClose,
         sessionActive,
+        sessionArchived,
         onRename,
+        onStop,
         onArchive,
+        onUnarchive,
         onDelete,
         anchorPoint,
         menuId
@@ -113,9 +119,19 @@ export function SessionActionMenu(props: SessionActionMenuProps) {
         onRename()
     }
 
+    const handleStop = () => {
+        onClose()
+        onStop()
+    }
+
     const handleArchive = () => {
         onClose()
         onArchive()
+    }
+
+    const handleUnarchive = () => {
+        onClose()
+        onUnarchive()
     }
 
     const handleDelete = () => {
@@ -244,21 +260,53 @@ export function SessionActionMenu(props: SessionActionMenuProps) {
                         type="button"
                         role="menuitem"
                         className={`${baseItemClassName} text-red-500 hover:bg-red-500/10`}
-                        onClick={handleArchive}
+                        onClick={handleStop}
                     >
                         <ArchiveIcon className="text-red-500" />
-                        {t('session.action.archive')}
+                        {t('session.action.stop')}
                     </button>
+                ) : sessionArchived ? (
+                    <>
+                        <button
+                            type="button"
+                            role="menuitem"
+                            className={`${baseItemClassName} hover:bg-[var(--app-subtle-bg)]`}
+                            onClick={handleUnarchive}
+                        >
+                            <ArchiveIcon className="text-[var(--app-hint)]" />
+                            {t('session.action.unarchive')}
+                        </button>
+                        <button
+                            type="button"
+                            role="menuitem"
+                            className={`${baseItemClassName} text-red-500 hover:bg-red-500/10`}
+                            onClick={handleDelete}
+                        >
+                            <TrashIcon className="text-red-500" />
+                            {t('session.action.delete')}
+                        </button>
+                    </>
                 ) : (
-                    <button
-                        type="button"
-                        role="menuitem"
-                        className={`${baseItemClassName} text-red-500 hover:bg-red-500/10`}
-                        onClick={handleDelete}
-                    >
-                        <TrashIcon className="text-red-500" />
-                        {t('session.action.delete')}
-                    </button>
+                    <>
+                        <button
+                            type="button"
+                            role="menuitem"
+                            className={`${baseItemClassName} hover:bg-[var(--app-subtle-bg)]`}
+                            onClick={handleArchive}
+                        >
+                            <ArchiveIcon className="text-[var(--app-hint)]" />
+                            {t('session.action.archive')}
+                        </button>
+                        <button
+                            type="button"
+                            role="menuitem"
+                            className={`${baseItemClassName} text-red-500 hover:bg-red-500/10`}
+                            onClick={handleDelete}
+                        >
+                            <TrashIcon className="text-red-500" />
+                            {t('session.action.delete')}
+                        </button>
+                    </>
                 )}
             </div>
         </div>

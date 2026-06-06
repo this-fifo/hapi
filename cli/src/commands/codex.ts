@@ -19,6 +19,7 @@ export const codexCommand: CommandDefinition = {
                 resumeSessionId?: string
                 model?: string
                 modelReasoningEffort?: string
+                existingSessionId?: string
             } = {}
             const unknownArgs: string[] = []
 
@@ -35,6 +36,12 @@ export const codexCommand: CommandDefinition = {
                 }
                 if (arg === '--started-by') {
                     options.startedBy = commandArgs[++i] as 'runner' | 'terminal'
+                } else if (arg === '--hapi-session-id') {
+                    const value = commandArgs[++i]
+                    if (!value) {
+                        throw new Error('Missing --hapi-session-id value')
+                    }
+                    options.existingSessionId = value
                 } else if (arg === '--yolo' || arg === '--dangerously-bypass-approvals-and-sandbox') {
                     options.permissionMode = 'yolo'
                     unknownArgs.push(arg)

@@ -41,6 +41,12 @@ export default {
   // Sessions page
   'sessions.count': '{n} sessions in {m} projects',
   'sessions.new': 'New Session',
+  'sessions.showArchived': 'Show archived',
+  'sessions.bucket.active': 'Active',
+  'sessions.bucket.recent': 'Recent · last 7d',
+  'sessions.bucket.thisMonth': 'This month · 7-30d',
+  'sessions.bucket.older': 'Older',
+  'sessions.bucket.archived': 'Archived',
 
   // Session list
   'session.item.path': 'path',
@@ -60,8 +66,10 @@ export default {
 
   // Session actions
   'session.action.rename': 'Rename',
+  'session.action.stop': 'Stop & shelve',
   'session.action.archive': 'Archive',
-  'session.action.delete': 'Delete',
+  'session.action.unarchive': 'Unarchive',
+  'session.action.delete': 'Delete forever',
   'session.action.copy': 'Copy',
 
   // Dialogs
@@ -70,15 +78,21 @@ export default {
   'dialog.rename.save': 'Save',
   'dialog.rename.saving': 'Saving…',
   'dialog.rename.error': 'Failed to rename. Please try again.',
-  'dialog.archive.title': 'Archive Session',
-  'dialog.archive.description': 'Are you sure you want to archive "{name}"? This will disconnect active session.',
-  'dialog.archive.confirm': 'Archive',
-  'dialog.archive.confirming': 'Archiving…',
+  'dialog.stop.title': 'Stop session',
+  'dialog.stop.description': 'Stop "{name}" and disconnect the running process? Conversation history is preserved.',
+  'dialog.stop.confirm': 'Stop',
+  'dialog.stop.confirming': 'Stopping…',
   'dialog.delete.title': 'Delete Session',
-  'dialog.delete.description': 'Are you sure you want to delete "{name}"? This action cannot be undone.',
-  'dialog.delete.confirm': 'Delete',
+  'dialog.delete.description': 'Permanently delete "{name}" and all its messages? This action cannot be undone.',
+  'dialog.delete.confirm': 'Delete forever',
   'dialog.delete.confirming': 'Deleting…',
   'dialog.error.default': 'Operation failed. Please try again.',
+
+  // Toasts
+  'toast.archived.title': 'Archived',
+  'toast.archived.undo': 'Undo',
+  'toast.unarchived.title': 'Unarchived',
+  'toast.unarchived.undo': 'Undo',
 
   // Common buttons
   'button.cancel': 'Cancel',
@@ -261,6 +275,22 @@ export default {
   'settings.voice.title': 'Voice Assistant',
   'settings.voice.language': 'Voice Language',
   'settings.voice.autoDetect': 'Auto-detect',
+  'settings.maintenance.title': 'Maintenance',
+  'settings.maintenance.autoArchiveIdle': 'Auto-archive idle sessions',
+  'settings.maintenance.autoDeleteArchived': 'Auto-delete archived sessions',
+  'settings.maintenance.daysSuffix': 'days',
+  'settings.maintenance.off': 'off',
+  'settings.maintenance.dbSize': 'Database size',
+  'settings.maintenance.activeCount': 'Active sessions',
+  'settings.maintenance.archivedCount': 'Archived sessions',
+  'settings.maintenance.archiveIdleNow': 'Archive idle now',
+  'settings.maintenance.archivedToast': 'Archived {n} session(s)',
+  'settings.maintenance.archiveFailed': 'Archive failed',
+  'settings.maintenance.vacuum': 'Compact (VACUUM)',
+  'settings.maintenance.vacuumDone': 'Compacted',
+  'settings.maintenance.vacuumDoneBody': 'New size: {size}',
+  'settings.maintenance.vacuumFailed': 'VACUUM failed',
+
   'settings.about.title': 'About',
   'settings.about.website': 'Website',
   'settings.about.appVersion': 'App Version',

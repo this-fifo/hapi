@@ -36,6 +36,12 @@ export const claudeCommand: CommandDefinition = {
                 unknownArgs.push(arg)
             } else if (arg === '--hapi-starting-mode') {
                 options.startingMode = z.enum(['local', 'remote']).parse(args[++i])
+            } else if (arg === '--hapi-session-id') {
+                const value = args[++i]
+                if (!value) {
+                    throw new Error('Missing --hapi-session-id value')
+                }
+                options.existingSessionId = value
             } else if (arg === '--yolo') {
                 options.permissionMode = 'bypassPermissions'
                 unknownArgs.push('--dangerously-skip-permissions')

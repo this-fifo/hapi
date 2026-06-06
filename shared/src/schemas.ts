@@ -176,7 +176,8 @@ export const SessionSchema = z.object({
     teamState: TeamStateSchema.optional(),
     model: z.string().nullable(),
     permissionMode: PermissionModeSchema.optional(),
-    collaborationMode: CodexCollaborationModeSchema.optional()
+    collaborationMode: CodexCollaborationModeSchema.optional(),
+    archivedAt: z.number().nullable()
 })
 
 export type Session = z.infer<typeof SessionSchema>

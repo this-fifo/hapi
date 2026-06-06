@@ -5,6 +5,7 @@ import { getElevenLabsSupportedLanguages, getLanguageDisplayName, type Language 
 import { getFontScaleOptions, useFontScale, type FontScale } from '@/hooks/useFontScale'
 import { useAppearance, getAppearanceOptions, type AppearancePreference } from '@/hooks/useTheme'
 import { PROTOCOL_VERSION } from '@hapi/protocol'
+import { MaintenanceSection } from './Maintenance'
 
 const locales: { value: Locale; nativeLabel: string }[] = [
     { value: 'en', nativeLabel: 'English' },
@@ -399,6 +400,9 @@ export default function SettingsPage() {
                             )}
                         </div>
                     </div>
+
+                    {/* Maintenance section */}
+                    <MaintenanceSection />
 
                     {/* About section */}
                     <div className="border-b border-[var(--app-divider)]">

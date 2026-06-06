@@ -156,8 +156,11 @@ export class ApiClient {
         return await res.json() as AuthResponse
     }
 
-    async getSessions(): Promise<SessionsResponse> {
-        return await this.request<SessionsResponse>('/api/sessions')
+    async getSessions(opts?: { showArchived?: boolean }): Promise<SessionsResponse> {
+        const path = opts?.showArchived
+            ? '/api/sessions?showArchived=1'
+            : '/api/sessions'
+        return await this.request<SessionsResponse>(path)
     }
 
     async getPushVapidPublicKey(): Promise<PushVapidPublicKeyResponse> {
@@ -292,8 +295,54 @@ export class ApiClient {
         })
     }
 
+    async stopSession(sessionId: string): Promise<void> {
+        await this.request(`/api/sessions/${encodeURIComponent(sessionId)}/stop`, {
+            method: 'POST',
+            body: JSON.stringify({})
+        })
+    }
+
     async archiveSession(sessionId: string): Promise<void> {
         await this.request(`/api/sessions/${encodeURIComponent(sessionId)}/archive`, {
+            method: 'POST',
+            body: JSON.stringify({})
+        })
+    }
+
+    async unarchiveSession(sessionId: string): Promise<void> {
+        await this.request(`/api/sessions/${encodeURIComponent(sessionId)}/unarchive`, {
+            method: 'POST',
+            body: JSON.stringify({})
+        })
+    }
+
+    async bulkArchive(opts: { olderThanDays?: number }): Promise<{ ok: boolean; archived: number }> {
+        return await this.request<{ ok: boolean; archived: number }>(`/api/sessions/bulk-archive`, {
+            method: 'POST',
+            body: JSON.stringify(opts)
+        })
+    }
+
+    async getServerSettings(): Promise<{ autoArchiveIdleDays: number | null; autoDeleteArchivedDays: number | null }> {
+        return await this.request('/api/settings')
+    }
+
+    async updateServerSettings(updates: {
+        autoArchiveIdleDays?: number | null
+        autoDeleteArchivedDays?: number | null
+    }): Promise<{ autoArchiveIdleDays: number | null; autoDeleteArchivedDays: number | null }> {
+        return await this.request('/api/settings', {
+            method: 'PATCH',
+            body: JSON.stringify(updates)
+        })
+    }
+
+    async getStorageStats(): Promise<{ dbBytes: number; sessionCount: number; archivedCount: number }> {
+        return await this.request('/api/maintenance/storage')
+    }
+
+    async runVacuum(): Promise<{ ok: boolean; dbBytes: number }> {
+        return await this.request('/api/maintenance/vacuum', {
             method: 'POST',
             body: JSON.stringify({})
         })

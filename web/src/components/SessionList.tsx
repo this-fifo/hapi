@@ -8,6 +8,7 @@ import { SessionActionMenu } from '@/components/SessionActionMenu'
 import { RenameSessionDialog } from '@/components/RenameSessionDialog'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { getSessionModelLabel } from '@/lib/sessionModelLabel'
+import { useToast } from '@/lib/toast-context'
 import { useTranslation } from '@/lib/use-translation'
 
 type SessionGroup = {
@@ -16,6 +17,49 @@ type SessionGroup = {
     sessions: SessionSummary[]
     latestUpdatedAt: number
     hasActiveSession: boolean
+}
+
+type BucketKey = 'active' | 'recent' | 'thisMonth' | 'older' | 'archived'
+
+const BUCKET_ORDER: BucketKey[] = ['active', 'recent', 'thisMonth', 'older', 'archived']
+
+const BUCKET_DEFAULT_EXPANDED: Record<BucketKey, boolean> = {
+    active: true,
+    recent: true,
+    thisMonth: false,
+    older: false,
+    archived: false
+}
+
+const RECENT_THRESHOLD_MS = 7 * 86_400_000
+const THIS_MONTH_THRESHOLD_MS = 30 * 86_400_000
+
+function getBucket(s: SessionSummary, now: number): BucketKey {
+    if (s.archivedAt !== null) return 'archived'
+    if (s.active) return 'active'
+    const ageMs = now - s.updatedAt
+    if (ageMs < RECENT_THRESHOLD_MS) return 'recent'
+    if (ageMs < THIS_MONTH_THRESHOLD_MS) return 'thisMonth'
+    return 'older'
+}
+
+function bucketize(sessions: SessionSummary[]): { bucket: BucketKey; groups: SessionGroup[] }[] {
+    const now = Date.now()
+    const byBucket = new Map<BucketKey, SessionSummary[]>()
+    for (const s of sessions) {
+        const b = getBucket(s, now)
+        const list = byBucket.get(b) ?? []
+        list.push(s)
+        byBucket.set(b, list)
+    }
+    const result: { bucket: BucketKey; groups: SessionGroup[] }[] = []
+    for (const bucket of BUCKET_ORDER) {
+        const items = byBucket.get(bucket)
+        if (items && items.length > 0) {
+            result.push({ bucket, groups: groupSessionsByDirectory(items) })
+        }
+    }
+    return result
 }
 
 function getGroupDisplayName(directory: string): string {
@@ -170,19 +214,65 @@ function SessionItem(props: {
     selected?: boolean
 }) {
     const { t } = useTranslation()
+    const { addToast } = useToast()
     const { session: s, onSelect, showPath = true, api, selected = false } = props
     const { haptic } = usePlatform()
     const [menuOpen, setMenuOpen] = useState(false)
     const [menuAnchorPoint, setMenuAnchorPoint] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
     const [renameOpen, setRenameOpen] = useState(false)
-    const [archiveOpen, setArchiveOpen] = useState(false)
+    const [stopOpen, setStopOpen] = useState(false)
     const [deleteOpen, setDeleteOpen] = useState(false)
 
-    const { archiveSession, renameSession, deleteSession, isPending } = useSessionActions(
+    const {
+        stopSession,
+        archiveSession,
+        unarchiveSession,
+        renameSession,
+        deleteSession,
+        isPending
+    } = useSessionActions(
         api,
         s.id,
         s.metadata?.flavor ?? null
     )
+
+    const sessionName = getSessionTitle(s)
+
+    const handleArchive = async () => {
+        try {
+            await archiveSession()
+            addToast({
+                title: t('toast.archived.title'),
+                body: sessionName,
+                sessionId: '',
+                url: '',
+                action: {
+                    label: t('toast.archived.undo'),
+                    onClick: () => { void unarchiveSession() }
+                }
+            })
+        } catch {
+            // mutation surfaces its own error path; nothing to do here
+        }
+    }
+
+    const handleUnarchive = async () => {
+        try {
+            await unarchiveSession()
+            addToast({
+                title: t('toast.unarchived.title'),
+                body: sessionName,
+                sessionId: '',
+                url: '',
+                action: {
+                    label: t('toast.unarchived.undo'),
+                    onClick: () => { void archiveSession() }
+                }
+            })
+        } catch {
+            // see above
+        }
+    }
 
     const longPressHandlers = useLongPress({
         onLongPress: (point) => {
@@ -198,7 +288,6 @@ function SessionItem(props: {
         threshold: 500
     })
 
-    const sessionName = getSessionTitle(s)
     const modelLabel = getSessionModelLabel(s)
     const statusDotClass = s.active
         ? (s.thinking ? 'bg-[#007AFF]' : 'bg-[var(--app-badge-success-text)]')
@@ -274,8 +363,11 @@ function SessionItem(props: {
                 isOpen={menuOpen}
                 onClose={() => setMenuOpen(false)}
                 sessionActive={s.active}
+                sessionArchived={s.archivedAt !== null}
                 onRename={() => setRenameOpen(true)}
-                onArchive={() => setArchiveOpen(true)}
+                onStop={() => setStopOpen(true)}
+                onArchive={() => { void handleArchive() }}
+                onUnarchive={() => { void handleUnarchive() }}
                 onDelete={() => setDeleteOpen(true)}
                 anchorPoint={menuAnchorPoint}
             />
@@ -289,13 +381,13 @@ function SessionItem(props: {
             />
 
             <ConfirmDialog
-                isOpen={archiveOpen}
-                onClose={() => setArchiveOpen(false)}
-                title={t('dialog.archive.title')}
-                description={t('dialog.archive.description', { name: sessionName })}
-                confirmLabel={t('dialog.archive.confirm')}
-                confirmingLabel={t('dialog.archive.confirming')}
-                onConfirm={archiveSession}
+                isOpen={stopOpen}
+                onClose={() => setStopOpen(false)}
+                title={t('dialog.stop.title')}
+                description={t('dialog.stop.description', { name: sessionName })}
+                confirmLabel={t('dialog.stop.confirm')}
+                confirmingLabel={t('dialog.stop.confirming')}
+                onConfirm={stopSession}
                 isPending={isPending}
                 destructive
             />
@@ -327,49 +419,87 @@ export function SessionList(props: {
 }) {
     const { t } = useTranslation()
     const { renderHeader = true, api, selectedSessionId } = props
-    const groups = useMemo(
-        () => groupSessionsByDirectory(props.sessions),
+    const buckets = useMemo(
+        () => bucketize(props.sessions),
         [props.sessions]
     )
-    const [collapseOverrides, setCollapseOverrides] = useState<Map<string, boolean>>(
+    const totalProjectCount = useMemo(() => {
+        const directories = new Set<string>()
+        for (const { groups } of buckets) {
+            for (const group of groups) {
+                directories.add(group.directory)
+            }
+        }
+        return directories.size
+    }, [buckets])
+
+    const [bucketCollapseOverrides, setBucketCollapseOverrides] = useState<Map<BucketKey, boolean>>(
         () => new Map()
     )
-    const isGroupCollapsed = (group: SessionGroup): boolean => {
-        const override = collapseOverrides.get(group.directory)
+    const [groupCollapseOverrides, setGroupCollapseOverrides] = useState<Map<string, boolean>>(
+        () => new Map()
+    )
+
+    const isBucketCollapsed = (bucket: BucketKey): boolean => {
+        const override = bucketCollapseOverrides.get(bucket)
         if (override !== undefined) return override
+        return !BUCKET_DEFAULT_EXPANDED[bucket]
+    }
+
+    const toggleBucket = (bucket: BucketKey, isCollapsed: boolean) => {
+        setBucketCollapseOverrides(prev => {
+            const next = new Map(prev)
+            next.set(bucket, !isCollapsed)
+            return next
+        })
+    }
+
+    const isGroupCollapsed = (bucket: BucketKey, group: SessionGroup): boolean => {
+        const key = `${bucket}::${group.directory}`
+        const override = groupCollapseOverrides.get(key)
+        if (override !== undefined) return override
+        // Within a bucket, default expand groups that have an active session;
+        // archived bucket also collapses everything by default.
+        if (bucket === 'archived') return true
         return !group.hasActiveSession
     }
 
-    const toggleGroup = (directory: string, isCollapsed: boolean) => {
-        setCollapseOverrides(prev => {
+    const toggleGroup = (bucket: BucketKey, directory: string, isCollapsed: boolean) => {
+        const key = `${bucket}::${directory}`
+        setGroupCollapseOverrides(prev => {
             const next = new Map(prev)
-            next.set(directory, !isCollapsed)
+            next.set(key, !isCollapsed)
             return next
         })
     }
 
     useEffect(() => {
-        setCollapseOverrides(prev => {
+        const known = new Set<string>()
+        for (const { bucket, groups } of buckets) {
+            for (const group of groups) {
+                known.add(`${bucket}::${group.directory}`)
+            }
+        }
+        setGroupCollapseOverrides(prev => {
             if (prev.size === 0) return prev
             const next = new Map(prev)
-            const knownGroups = new Set(groups.map(group => group.directory))
             let changed = false
-            for (const directory of next.keys()) {
-                if (!knownGroups.has(directory)) {
-                    next.delete(directory)
+            for (const key of next.keys()) {
+                if (!known.has(key)) {
+                    next.delete(key)
                     changed = true
                 }
             }
             return changed ? next : prev
         })
-    }, [groups])
+    }, [buckets])
 
     return (
         <div className="mx-auto w-full max-w-content flex flex-col">
             {renderHeader ? (
                 <div className="flex items-center justify-between px-3 py-1">
                     <div className="text-xs text-[var(--app-hint)]">
-                        {t('sessions.count', { n: props.sessions.length, m: groups.length })}
+                        {t('sessions.count', { n: props.sessions.length, m: totalProjectCount })}
                     </div>
                     <button
                         type="button"
@@ -383,42 +513,69 @@ export function SessionList(props: {
             ) : null}
 
             <div className="flex flex-col">
-                {groups.map((group) => {
-                    const isCollapsed = isGroupCollapsed(group)
+                {buckets.map(({ bucket, groups }) => {
+                    const bucketCollapsed = isBucketCollapsed(bucket)
+                    const sessionCount = groups.reduce((n, g) => n + g.sessions.length, 0)
                     return (
-                        <div key={group.directory}>
+                        <div key={bucket}>
                             <button
                                 type="button"
-                                onClick={() => toggleGroup(group.directory, isCollapsed)}
-                                className="sticky top-0 z-10 flex w-full items-center gap-2 px-3 py-2 text-left bg-[var(--app-bg)] border-b border-[var(--app-divider)] transition-colors hover:bg-[var(--app-secondary-bg)]"
+                                onClick={() => toggleBucket(bucket, bucketCollapsed)}
+                                className="sticky top-0 z-20 flex w-full items-center gap-2 px-3 py-2 text-left bg-[var(--app-secondary-bg)] border-b border-[var(--app-divider)] transition-colors hover:bg-[var(--app-subtle-bg)]"
                             >
                                 <ChevronIcon
                                     className="h-4 w-4 text-[var(--app-hint)]"
-                                    collapsed={isCollapsed}
+                                    collapsed={bucketCollapsed}
                                 />
-                                <div className="flex items-center gap-2 min-w-0 flex-1">
-                                    <span className="font-medium text-base break-words" title={group.directory}>
-                                        {group.displayName}
-                                    </span>
-                                    <span className="shrink-0 text-xs text-[var(--app-hint)]">
-                                        ({group.sessions.length})
-                                    </span>
-                                </div>
+                                <span className="text-xs font-semibold uppercase tracking-wide text-[var(--app-fg)]">
+                                    {t(`sessions.bucket.${bucket}`)}
+                                </span>
+                                <span className="ml-auto text-xs text-[var(--app-hint)] tabular-nums">
+                                    {sessionCount}
+                                </span>
                             </button>
-                            {!isCollapsed ? (
-                                <div className="flex flex-col divide-y divide-[var(--app-divider)] border-b border-[var(--app-divider)]">
-                                    {group.sessions.map((s) => (
-                                        <SessionItem
-                                            key={s.id}
-                                            session={s}
-                                            onSelect={props.onSelect}
-                                            showPath={false}
-                                            api={api}
-                                            selected={s.id === selectedSessionId}
-                                        />
-                                    ))}
-                                </div>
-                            ) : null}
+                            {!bucketCollapsed ? groups.map((group) => {
+                                const groupCollapsed = isGroupCollapsed(bucket, group)
+                                return (
+                                    <div key={`${bucket}::${group.directory}`}>
+                                        <button
+                                            type="button"
+                                            onClick={() => toggleGroup(bucket, group.directory, groupCollapsed)}
+                                            className="sticky top-[33px] z-10 flex w-full items-center gap-2 px-3 py-2 text-left bg-[var(--app-bg)] border-b border-[var(--app-divider)] transition-colors hover:bg-[var(--app-secondary-bg)]"
+                                        >
+                                            <ChevronIcon
+                                                className="h-4 w-4 text-[var(--app-hint)]"
+                                                collapsed={groupCollapsed}
+                                            />
+                                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                <span className="font-medium text-base break-words" title={group.directory}>
+                                                    {group.displayName}
+                                                </span>
+                                                <span className="shrink-0 text-xs text-[var(--app-hint)] tabular-nums">
+                                                    ({group.sessions.length})
+                                                </span>
+                                            </div>
+                                            <span className="shrink-0 text-xs text-[var(--app-hint)]">
+                                                {formatRelativeTime(group.latestUpdatedAt, t)}
+                                            </span>
+                                        </button>
+                                        {!groupCollapsed ? (
+                                            <div className="flex flex-col divide-y divide-[var(--app-divider)] border-b border-[var(--app-divider)]">
+                                                {group.sessions.map((s) => (
+                                                    <SessionItem
+                                                        key={s.id}
+                                                        session={s}
+                                                        onSelect={props.onSelect}
+                                                        showPath={false}
+                                                        api={api}
+                                                        selected={s.id === selectedSessionId}
+                                                    />
+                                                ))}
+                                            </div>
+                                        ) : null}
+                                    </div>
+                                )
+                            }) : null}
                         </div>
                     )
                 })}

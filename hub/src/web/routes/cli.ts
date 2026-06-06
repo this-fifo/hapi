@@ -10,6 +10,7 @@ const bearerSchema = z.string().regex(/^Bearer\s+(.+)$/i)
 
 const createOrLoadSessionSchema = z.object({
     tag: z.string().min(1),
+    existingSessionId: z.string().min(1).optional(),
     metadata: z.unknown(),
     agentState: z.unknown().nullable().optional(),
     model: z.string().optional()
@@ -101,6 +102,18 @@ export function createCliRoutes(getSyncEngine: () => SyncEngine | null): Hono<Cl
         }
 
         const namespace = c.get('namespace')
+
+        if (parsed.data.existingSessionId) {
+            const access = engine.resolveSessionAccess(parsed.data.existingSessionId, namespace)
+            if (access.ok) {
+                return c.json({ session: access.session })
+            }
+            if (access.reason === 'access-denied') {
+                return c.json({ error: 'Session access denied' }, 403)
+            }
+            // not-found: fall through to fresh-create as a defensive safety net
+        }
+
         const session = engine.getOrCreateSession(
             parsed.data.tag,
             parsed.data.metadata,

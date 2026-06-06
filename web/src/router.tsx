@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import {
     Navigate,
@@ -29,7 +29,7 @@ import { useSendMessage } from '@/hooks/mutations/useSendMessage'
 import { queryKeys } from '@/lib/query-keys'
 import { useToast } from '@/lib/toast-context'
 import { useTranslation } from '@/lib/use-translation'
-import { fetchLatestMessages, seedMessageWindowFromSession } from '@/lib/message-window-store'
+import { fetchLatestMessages } from '@/lib/message-window-store'
 import FilesPage from '@/routes/sessions/files'
 import FilePage from '@/routes/sessions/file'
 import TerminalPage from '@/routes/sessions/terminal'
@@ -74,6 +74,27 @@ function PlusIcon(props: { className?: string }) {
     )
 }
 
+function EyeIcon(props: { className?: string; off?: boolean }) {
+    return (
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={props.className}
+        >
+            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+            <circle cx="12" cy="12" r="3" />
+            {props.off ? <line x1="3" y1="3" x2="21" y2="21" /> : null}
+        </svg>
+    )
+}
+
 function SettingsIcon(props: { className?: string }) {
     return (
         <svg
@@ -94,13 +115,31 @@ function SettingsIcon(props: { className?: string }) {
     )
 }
 
+const SHOW_ARCHIVED_KEY = 'hapi-show-archived'
+
 function SessionsPage() {
     const { api } = useAppContext()
     const navigate = useNavigate()
     const pathname = useLocation({ select: location => location.pathname })
     const matchRoute = useMatchRoute()
     const { t } = useTranslation()
-    const { sessions, isLoading, error, refetch } = useSessions(api)
+    const [showArchived, setShowArchived] = useState<boolean>(() => {
+        if (typeof localStorage === 'undefined') return false
+        return localStorage.getItem(SHOW_ARCHIVED_KEY) === '1'
+    })
+    const { sessions, isLoading, error, refetch } = useSessions(api, { showArchived })
+
+    const toggleShowArchived = useCallback(() => {
+        setShowArchived((prev) => {
+            const next = !prev
+            try {
+                localStorage.setItem(SHOW_ARCHIVED_KEY, next ? '1' : '0')
+            } catch {
+                // localStorage may be unavailable (private mode); ignore
+            }
+            return next
+        })
+    }, [])
 
     const handleRefresh = useCallback(() => {
         void refetch()
@@ -122,6 +161,15 @@ function SessionsPage() {
                             {t('sessions.count', { n: sessions.length, m: projectCount })}
                         </div>
                         <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={toggleShowArchived}
+                                aria-pressed={showArchived}
+                                className={`p-1.5 rounded-full transition-colors hover:bg-[var(--app-subtle-bg)] ${showArchived ? 'text-[var(--app-fg)]' : 'text-[var(--app-hint)] hover:text-[var(--app-fg)]'}`}
+                                title={t('sessions.showArchived')}
+                            >
+                                <EyeIcon className="h-5 w-5" off={!showArchived} />
+                            </button>
                             <button
                                 type="button"
                                 onClick={() => navigate({ to: '/settings' })}
@@ -181,8 +229,6 @@ function SessionPage() {
     const { api } = useAppContext()
     const { t } = useTranslation()
     const goBack = useAppGoBack()
-    const navigate = useNavigate()
-    const queryClient = useQueryClient()
     const { addToast } = useToast()
     const { sessionId } = useParams({ from: '/sessions/$sessionId' })
     const {
@@ -227,28 +273,11 @@ function SessionPage() {
         onSessionResolved: (resolvedSessionId) => {
             void (async () => {
                 if (api) {
-                    if (session && resolvedSessionId !== session.id) {
-                        seedMessageWindowFromSession(session.id, resolvedSessionId)
-                        queryClient.setQueryData(queryKeys.session(resolvedSessionId), {
-                            session: { ...session, id: resolvedSessionId, active: true }
-                        })
-                    }
                     try {
-                        await Promise.all([
-                            queryClient.prefetchQuery({
-                                queryKey: queryKeys.session(resolvedSessionId),
-                                queryFn: () => api.getSession(resolvedSessionId),
-                            }),
-                            fetchLatestMessages(api, resolvedSessionId),
-                        ])
+                        await fetchLatestMessages(api, resolvedSessionId)
                     } catch {
                     }
                 }
-                navigate({
-                    to: '/sessions/$sessionId',
-                    params: { sessionId: resolvedSessionId },
-                    replace: true
-                })
             })()
         },
         onBlocked: (reason) => {

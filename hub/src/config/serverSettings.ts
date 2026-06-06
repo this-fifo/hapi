@@ -8,7 +8,7 @@
  * it will be saved to settings.json for future use
  */
 
-import { getSettingsFile, readSettings, writeSettings } from './settings'
+import { getSettingsFile, readSettings, writeSettings, type Settings } from './settings'
 
 export interface ServerSettings {
     telegramBotToken: string | null
@@ -17,7 +17,12 @@ export interface ServerSettings {
     listenPort: number
     publicUrl: string
     corsOrigins: string[]
+    autoArchiveIdleDays: number | null
+    autoDeleteArchivedDays: number | null
 }
+
+export const DEFAULT_AUTO_ARCHIVE_IDLE_DAYS = 30
+export const DEFAULT_AUTO_DELETE_ARCHIVED_DAYS = 90
 
 export interface ServerSettingsResult {
     settings: ServerSettings
@@ -203,6 +208,26 @@ export async function loadServerSettings(dataDir: string): Promise<ServerSetting
         corsOrigins = deriveCorsOrigins(publicUrl)
     }
 
+    // autoArchiveIdleDays: file > default (30). null in file means "off".
+    let autoArchiveIdleDays: number | null
+    if (settings.autoArchiveIdleDays !== undefined) {
+        autoArchiveIdleDays = settings.autoArchiveIdleDays
+    } else {
+        autoArchiveIdleDays = DEFAULT_AUTO_ARCHIVE_IDLE_DAYS
+        settings.autoArchiveIdleDays = autoArchiveIdleDays
+        needsSave = true
+    }
+
+    // autoDeleteArchivedDays: file > default (90). null in file means "off".
+    let autoDeleteArchivedDays: number | null
+    if (settings.autoDeleteArchivedDays !== undefined) {
+        autoDeleteArchivedDays = settings.autoDeleteArchivedDays
+    } else {
+        autoDeleteArchivedDays = DEFAULT_AUTO_DELETE_ARCHIVED_DAYS
+        settings.autoDeleteArchivedDays = autoDeleteArchivedDays
+        needsSave = true
+    }
+
     // Save settings if any new values were added
     if (needsSave) {
         await writeSettings(settingsFile, settings)
@@ -216,8 +241,36 @@ export async function loadServerSettings(dataDir: string): Promise<ServerSetting
             listenPort,
             publicUrl,
             corsOrigins,
+            autoArchiveIdleDays,
+            autoDeleteArchivedDays,
         },
         sources,
         savedToFile: needsSave,
+    }
+}
+
+/**
+ * Update one or more user-mutable maintenance settings, persist to file,
+ * and return the new values. Other fields stay untouched.
+ */
+export async function updateMaintenanceSettings(
+    dataDir: string,
+    updates: Partial<Pick<Settings, 'autoArchiveIdleDays' | 'autoDeleteArchivedDays'>>
+): Promise<{ autoArchiveIdleDays: number | null; autoDeleteArchivedDays: number | null }> {
+    const settingsFile = getSettingsFile(dataDir)
+    const current = await readSettings(settingsFile)
+    if (current === null) {
+        throw new Error(`Cannot read ${settingsFile}; refusing to overwrite.`)
+    }
+    if ('autoArchiveIdleDays' in updates) {
+        current.autoArchiveIdleDays = updates.autoArchiveIdleDays ?? null
+    }
+    if ('autoDeleteArchivedDays' in updates) {
+        current.autoDeleteArchivedDays = updates.autoDeleteArchivedDays ?? null
+    }
+    await writeSettings(settingsFile, current)
+    return {
+        autoArchiveIdleDays: current.autoArchiveIdleDays ?? null,
+        autoDeleteArchivedDays: current.autoDeleteArchivedDays ?? null,
     }
 }

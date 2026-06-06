@@ -6,6 +6,10 @@ export default {
         extend: {
             maxWidth: {
                 content: '720px'
+            },
+            fontFamily: {
+                sans: ['var(--font-sans)'],
+                mono: ['var(--font-mono)']
             }
         }
     },

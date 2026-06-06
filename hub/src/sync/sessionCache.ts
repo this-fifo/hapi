@@ -20,8 +20,13 @@ export class SessionCache {
         return Array.from(this.sessions.values())
     }
 
-    getSessionsByNamespace(namespace: string): Session[] {
-        return this.getSessions().filter((session) => session.namespace === namespace)
+    getSessionsByNamespace(namespace: string, opts?: { includeArchived?: boolean }): Session[] {
+        const includeArchived = opts?.includeArchived === true
+        return this.getSessions().filter((session) => {
+            if (session.namespace !== namespace) return false
+            if (!includeArchived && session.archivedAt !== null) return false
+            return true
+        })
     }
 
     getSession(sessionId: string): Session | undefined {
@@ -128,7 +133,8 @@ export class SessionCache {
             teamState,
             model: stored.model,
             permissionMode: existing?.permissionMode,
-            collaborationMode: existing?.collaborationMode
+            collaborationMode: existing?.collaborationMode,
+            archivedAt: stored.archivedAt
         }
 
         this.sessions.set(sessionId, session)
@@ -299,6 +305,60 @@ export class SessionCache {
         }
 
         this.refreshSession(sessionId)
+    }
+
+    softArchiveSession(sessionId: string): boolean {
+        const session = this.sessions.get(sessionId)
+        if (!session) return false
+        if (session.archivedAt !== null) return true
+        if (session.active) {
+            throw new Error('Cannot archive active session; call stopSession first')
+        }
+        const ok = this.store.sessions.archiveSession(sessionId, session.namespace)
+        if (!ok) return false
+        session.archivedAt = Date.now()
+        this.publisher.emit({ type: 'session-removed', sessionId, namespace: session.namespace })
+        return true
+    }
+
+    unarchiveSession(sessionId: string): boolean {
+        const session = this.sessions.get(sessionId) ?? this.refreshSession(sessionId)
+        if (!session) return false
+        if (session.archivedAt === null) return true
+        const ok = this.store.sessions.unarchiveSession(sessionId, session.namespace)
+        if (!ok) return false
+        session.archivedAt = null
+        this.publisher.emit({ type: 'session-added', sessionId, data: session })
+        return true
+    }
+
+    bulkArchiveIdle(namespace: string, idleDays: number): number {
+        if (idleDays <= 0) return 0
+        const updatedBefore = Date.now() - idleDays * 86_400_000
+        const candidates = this.getSessionsByNamespace(namespace)
+            .filter((s) => !s.active && s.archivedAt === null && s.updatedAt < updatedBefore)
+        let archived = 0
+        for (const session of candidates) {
+            try {
+                if (this.softArchiveSession(session.id)) archived += 1
+            } catch {
+                // session became active mid-iteration — skip
+            }
+        }
+        return archived
+    }
+
+    deleteArchivedOlderThan(namespace: string, archivedDays: number): number {
+        if (archivedDays <= 0) return 0
+        const archivedBefore = Date.now() - archivedDays * 86_400_000
+        const ids = this.store.sessions.deleteArchivedOlderThan(namespace, archivedBefore)
+        for (const id of ids) {
+            this.sessions.delete(id)
+            this.lastBroadcastAtBySessionId.delete(id)
+            this.todoBackfillAttemptedSessionIds.delete(id)
+            this.publisher.emit({ type: 'session-removed', sessionId: id, namespace })
+        }
+        return ids.length
     }
 
     async deleteSession(sessionId: string): Promise<void> {

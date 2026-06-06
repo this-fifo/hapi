@@ -28,6 +28,7 @@ export interface StartOptions {
     claudeEnvVars?: Record<string, string>
     claudeArgs?: string[]
     startedBy?: 'runner' | 'terminal'
+    existingSessionId?: string
 }
 
 export async function runClaude(options: StartOptions = {}): Promise<void> {
@@ -52,6 +53,7 @@ export async function runClaude(options: StartOptions = {}): Promise<void> {
         flavor: 'claude',
         startedBy,
         workingDirectory,
+        existingSessionId: options.existingSessionId,
         agentState: initialState,
         model: initialModel ?? undefined
     });
