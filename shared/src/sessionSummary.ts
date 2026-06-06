@@ -34,6 +34,7 @@ export type SessionSummary = {
     futureScheduledMessageCount: number
     model: string | null
     effort: string | null
+    archivedAt: number | null
 }
 
 export function getPendingRequestKinds(session: Session): PendingRequestKind[] {
@@ -89,6 +90,7 @@ export function toSessionSummary(session: Session): SessionSummary {
         backgroundTaskCount: session.backgroundTaskCount ?? 0,
         futureScheduledMessageCount: 0,
         model: session.model,
-        effort: session.effort
+        effort: session.effort,
+        archivedAt: session.archivedAt
     }
 }

@@ -16,6 +16,12 @@ vi.mock('@tanstack/react-router', () => ({
     useLocation: () => '/settings',
 }))
 
+// MaintenanceSection talks to TanStack Query and the toast provider; stub it out
+// so this test stays focused on the settings page layout, not server hooks.
+vi.mock('./Maintenance', () => ({
+    MaintenanceSection: () => null,
+}))
+
 // Mock useFontScale hook
 vi.mock('@/hooks/useFontScale', () => ({
     useFontScale: () => ({ fontScale: 1, setFontScale: vi.fn() }),

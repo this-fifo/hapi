@@ -63,8 +63,9 @@ export function createSessionsRoutes(getSyncEngine: () => SyncEngine | null): Ho
 
         const getPendingCount = (s: Session) => s.agentState?.requests ? Object.keys(s.agentState.requests).length : 0
 
+        const includeArchived = c.req.query('includeArchived') === 'true'
         const namespace = c.get('namespace')
-        const sessionRecords = engine.getSessionsByNamespace(namespace)
+        const sessionRecords = engine.getSessionsByNamespace(namespace, { includeArchived })
             .sort((a, b) => {
                 // Active sessions first
                 if (a.active !== b.active) {
@@ -258,13 +259,42 @@ export function createSessionsRoutes(getSyncEngine: () => SyncEngine | null): Ho
             return engine
         }
 
-        const sessionResult = requireSessionFromParam(c, engine, { requireActive: true })
+        const sessionResult = requireSessionFromParam(c, engine)
         if (sessionResult instanceof Response) {
             return sessionResult
         }
 
-        await engine.archiveSession(sessionResult.sessionId)
-        return c.json({ ok: true })
+        if (sessionResult.session.active) {
+            return c.json({ error: 'Cannot archive an active session. Stop it first.', code: 'session_active' }, 409)
+        }
+
+        try {
+            engine.softArchiveSession(sessionResult.sessionId)
+            return c.json({ ok: true })
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to archive session'
+            return c.json({ error: message }, 500)
+        }
+    })
+
+    app.post('/sessions/:id/unarchive', async (c) => {
+        const engine = requireSyncEngine(c, getSyncEngine)
+        if (engine instanceof Response) {
+            return engine
+        }
+
+        const sessionResult = requireSessionFromParam(c, engine)
+        if (sessionResult instanceof Response) {
+            return sessionResult
+        }
+
+        try {
+            engine.unarchiveSession(sessionResult.sessionId)
+            return c.json({ ok: true })
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to unarchive session'
+            return c.json({ error: message }, 500)
+        }
     })
 
     app.post('/sessions/:id/switch', async (c) => {

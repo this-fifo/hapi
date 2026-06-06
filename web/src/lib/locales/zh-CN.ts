@@ -42,6 +42,12 @@ export default {
   // Sessions page
   'sessions.count': '{n} 个会话，{m} 个项目',
   'sessions.new': '新建会话',
+  'sessions.showArchived': '显示已归档',
+  'sessions.bucket.active': '活跃',
+  'sessions.bucket.recent': '最近 · 7 天内',
+  'sessions.bucket.thisMonth': '本月 · 7-30 天',
+  'sessions.bucket.older': '更早',
+  'sessions.bucket.archived': '已归档',
   'sessions.empty.title': '还没有会话',
   'sessions.empty.hint': '在 workspace 下任意目录启动一个会话，或先浏览目录树看看。',
   'sessions.empty.startSession': '启动会话',
@@ -133,6 +139,7 @@ export default {
   'session.action.rename': '重命名',
   'session.action.export': '导出对话',
   'session.action.archive': '归档',
+  'session.action.unarchive': '取消归档',
   'session.action.delete': '删除',
   'session.action.copy': '复制',
 
@@ -157,6 +164,12 @@ export default {
   'dialog.delete.confirm': '删除',
   'dialog.delete.confirming': '删除中…',
   'dialog.error.default': '操作失败，请重试。',
+
+  // Toasts
+  'toast.archived.title': '已归档',
+  'toast.archived.undo': '撤销',
+  'toast.unarchived.title': '已取消归档',
+  'toast.unarchived.undo': '撤销',
 
   // Session export
   'session.export.title': '导出对话',
@@ -581,6 +594,18 @@ export default {
   'settings.voice.session.label': '会话行为',
   'settings.voice.proactive': '以摘要开始语音会话',
   'settings.voice.proactive.description': '开启后，启动语音会话时将朗读当前代理活动的摘要。关闭后，助手向您打招呼并等待您先开口。',
+  'settings.maintenance.title': '维护',
+  'settings.maintenance.autoArchiveIdle': '自动归档闲置会话',
+  'settings.maintenance.autoDeleteArchived': '自动删除已归档会话',
+  'settings.maintenance.daysSuffix': '天',
+  'settings.maintenance.off': '关闭',
+  'settings.maintenance.dbSize': '数据库大小',
+  'settings.maintenance.activeCount': '活跃会话',
+  'settings.maintenance.archivedCount': '已归档会话',
+  'settings.maintenance.vacuum': '压缩 (VACUUM)',
+  'settings.maintenance.vacuumDone': '已压缩',
+  'settings.maintenance.vacuumDoneBody': '新大小：{size}',
+  'settings.maintenance.vacuumFailed': 'VACUUM 失败',
   'settings.about.title': '关于',
   'settings.about.website': '官方网站',
   'settings.about.appVersion': '应用版本',

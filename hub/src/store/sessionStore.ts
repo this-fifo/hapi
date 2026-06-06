@@ -2,6 +2,9 @@ import type { Database } from 'bun:sqlite'
 
 import type { StoredSession, VersionedUpdateResult } from './types'
 import {
+    archiveSession,
+    bulkArchiveIdle,
+    deleteArchivedOlderThan,
     deleteSession,
     getOrCreateSession,
     getSession,
@@ -14,6 +17,7 @@ import {
     setSessionTeamState,
     setSessionTodos,
     touchSessionUpdatedAt,
+    unarchiveSession,
     updateSessionAgentState,
     updateSessionMetadata
 } from './sessions'
@@ -93,12 +97,28 @@ export class SessionStore {
         return getSessionByNamespace(this.db, id, namespace)
     }
 
-    getSessions(): StoredSession[] {
-        return getSessions(this.db)
+    getSessions(opts?: { includeArchived?: boolean }): StoredSession[] {
+        return getSessions(this.db, opts)
     }
 
-    getSessionsByNamespace(namespace: string): StoredSession[] {
-        return getSessionsByNamespace(this.db, namespace)
+    getSessionsByNamespace(namespace: string, opts?: { includeArchived?: boolean }): StoredSession[] {
+        return getSessionsByNamespace(this.db, namespace, opts)
+    }
+
+    archiveSession(id: string, namespace: string): boolean {
+        return archiveSession(this.db, id, namespace)
+    }
+
+    unarchiveSession(id: string, namespace: string): boolean {
+        return unarchiveSession(this.db, id, namespace)
+    }
+
+    bulkArchiveIdle(namespace: string, updatedBeforeMs: number): string[] {
+        return bulkArchiveIdle(this.db, namespace, updatedBeforeMs)
+    }
+
+    deleteArchivedOlderThan(namespace: string, archivedBeforeMs: number): string[] {
+        return deleteArchivedOlderThan(this.db, namespace, archivedBeforeMs)
     }
 
     deleteSession(id: string, namespace: string): boolean {

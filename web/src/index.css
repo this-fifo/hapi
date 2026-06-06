@@ -2,6 +2,50 @@
 @import "katex/dist/katex.min.css";
 @config "../tailwind.config.ts";
 
+@font-face {
+    font-family: 'Lilex';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url('/fonts/Lilex.woff2') format('woff2-variations');
+}
+
+@font-face {
+    font-family: 'Lilex';
+    font-style: italic;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url('/fonts/Lilex-Italic.woff2') format('woff2-variations');
+}
+
+:root {
+    --font-sans: 'Lilex', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --font-mono: 'Lilex', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+html, body {
+    font-family: var(--font-sans);
+    font-feature-settings:
+        "calt" 1,
+        "liga" 1,
+        "cv01" 1,
+        "cv14" 1,
+        "case" 1;
+    font-variant-numeric: lining-nums;
+}
+
+code, pre, .font-mono, kbd, samp {
+    font-family: var(--font-mono);
+    font-feature-settings:
+        "calt" 1,
+        "liga" 1,
+        "cv14" 1;
+}
+
+.tabular-nums {
+    font-variant-numeric: tabular-nums;
+}
+
 :root {
     --app-bg: var(--tg-theme-bg-color, #ffffff);
     --app-fg: var(--tg-theme-text-color, #111827);

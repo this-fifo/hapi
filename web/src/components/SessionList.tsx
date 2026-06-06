@@ -9,6 +9,7 @@ import { RenameSessionDialog } from '@/components/RenameSessionDialog'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { CopyIcon, CheckIcon, ScheduleIcon } from '@/components/icons'
 import { cn } from '@/lib/utils'
+import { useToast } from '@/lib/toast-context'
 import { useTranslation } from '@/lib/use-translation'
 import { DEFAULT_SESSION_PREVIEW_LIMIT, useSessionPreviewLimit } from '@/hooks/useSessionPreviewLimit'
 import { AgentFlavorIcon } from '@/components/AgentFlavorIcon'
@@ -26,6 +27,49 @@ type SessionGroup = {
     sessions: SessionSummary[]
     latestUpdatedAt: number
     hasActiveSession: boolean
+}
+
+type BucketKey = 'active' | 'recent' | 'thisMonth' | 'older' | 'archived'
+
+const BUCKET_ORDER: BucketKey[] = ['active', 'recent', 'thisMonth', 'older', 'archived']
+
+const BUCKET_DEFAULT_EXPANDED: Record<BucketKey, boolean> = {
+    active: true,
+    recent: true,
+    thisMonth: false,
+    older: false,
+    archived: false
+}
+
+const RECENT_THRESHOLD_MS = 7 * 86_400_000
+const THIS_MONTH_THRESHOLD_MS = 30 * 86_400_000
+
+function getBucket(s: SessionSummary, now: number): BucketKey {
+    if (s.archivedAt !== null && s.archivedAt !== undefined) return 'archived'
+    if (s.active) return 'active'
+    const ageMs = now - s.updatedAt
+    if (ageMs < RECENT_THRESHOLD_MS) return 'recent'
+    if (ageMs < THIS_MONTH_THRESHOLD_MS) return 'thisMonth'
+    return 'older'
+}
+
+function bucketizeSessions(sessions: SessionSummary[]): { bucket: BucketKey; sessions: SessionSummary[] }[] {
+    const now = Date.now()
+    const byBucket = new Map<BucketKey, SessionSummary[]>()
+    for (const s of sessions) {
+        const b = getBucket(s, now)
+        const list = byBucket.get(b) ?? []
+        list.push(s)
+        byBucket.set(b, list)
+    }
+    const result: { bucket: BucketKey; sessions: SessionSummary[] }[] = []
+    for (const bucket of BUCKET_ORDER) {
+        const items = byBucket.get(bucket)
+        if (items && items.length > 0) {
+            result.push({ bucket, sessions: items })
+        }
+    }
+    return result
 }
 
 function SessionsEmptyState(props: {
@@ -186,7 +230,8 @@ function groupSessionsByDirectory(sessions: SessionSummary[]): SessionGroup[] {
 
 export function expandSelectedSessionCollapseOverrides(
     overrides: Map<string, boolean>,
-    group: { key: string; machineId: string | null }
+    group: { key: string; machineId: string | null },
+    bucket?: BucketKey
 ): Map<string, boolean> {
     const next = new Map(overrides)
     let changed = false
@@ -197,7 +242,9 @@ export function expandSelectedSessionCollapseOverrides(
         changed = true
     }
 
-    const machineKey = `machine::${group.machineId ?? UNKNOWN_MACHINE_ID}`
+    const machineKey = bucket
+        ? `machine::${bucket}::${group.machineId ?? UNKNOWN_MACHINE_ID}`
+        : `machine::${group.machineId ?? UNKNOWN_MACHINE_ID}`
     if (overrides.has(machineKey) && overrides.get(machineKey)) {
         next.delete(machineKey)
         changed = true
@@ -559,19 +606,63 @@ function SessionItem(props: {
     showDetailedStatus?: boolean
 }) {
     const { t } = useTranslation()
+    const { addToast } = useToast()
     const { session: s, onSelect, showPath = true, api, selected = false, showDetailedStatus = false } = props
     const { haptic } = usePlatform()
     const [menuOpen, setMenuOpen] = useState(false)
     const [menuAnchorPoint, setMenuAnchorPoint] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
     const [renameOpen, setRenameOpen] = useState(false)
-    const [archiveOpen, setArchiveOpen] = useState(false)
     const [deleteOpen, setDeleteOpen] = useState(false)
 
-    const { archiveSession, renameSession, deleteSession, isPending } = useSessionActions(
+    const {
+        archiveSession,
+        unarchiveSession,
+        renameSession,
+        deleteSession,
+        isPending
+    } = useSessionActions(
         api,
         s.id,
         s.metadata?.flavor ?? null
     )
+
+    const sessionName = getSessionTitle(s)
+
+    const handleArchive = async () => {
+        try {
+            await archiveSession()
+            addToast({
+                title: t('toast.archived.title'),
+                body: sessionName,
+                sessionId: '',
+                url: '',
+                action: {
+                    label: t('toast.archived.undo'),
+                    onClick: () => { void unarchiveSession() }
+                }
+            })
+        } catch {
+            // mutation surfaces its own error path; nothing to do here
+        }
+    }
+
+    const handleUnarchive = async () => {
+        try {
+            await unarchiveSession()
+            addToast({
+                title: t('toast.unarchived.title'),
+                body: sessionName,
+                sessionId: '',
+                url: '',
+                action: {
+                    label: t('toast.unarchived.undo'),
+                    onClick: () => { void archiveSession() }
+                }
+            })
+        } catch {
+            // see above
+        }
+    }
 
     const longPressHandlers = useLongPress({
         onLongPress: (point) => {
@@ -587,7 +678,6 @@ function SessionItem(props: {
         threshold: 500
     })
 
-    const sessionName = getSessionTitle(s)
     const todoProgress = getTodoProgress(s)
     const attention = useMemo(
         () => showDetailedStatus
@@ -659,8 +749,10 @@ function SessionItem(props: {
                 isOpen={menuOpen}
                 onClose={() => setMenuOpen(false)}
                 sessionActive={s.active}
+                sessionArchived={s.archivedAt !== null}
                 onRename={() => setRenameOpen(true)}
-                onArchive={() => setArchiveOpen(true)}
+                onArchive={() => { void handleArchive() }}
+                onUnarchive={() => { void handleUnarchive() }}
                 onDelete={() => setDeleteOpen(true)}
                 anchorPoint={menuAnchorPoint}
             />
@@ -671,18 +763,6 @@ function SessionItem(props: {
                 currentName={sessionName}
                 onRename={renameSession}
                 isPending={isPending}
-            />
-
-            <ConfirmDialog
-                isOpen={archiveOpen}
-                onClose={() => setArchiveOpen(false)}
-                title={t('dialog.archive.title')}
-                description={t('dialog.archive.description', { name: sessionName })}
-                confirmLabel={t('dialog.archive.confirm')}
-                confirmingLabel={t('dialog.archive.confirming')}
-                onConfirm={archiveSession}
-                isPending={isPending}
-                destructive
             />
 
             <ConfirmDialog
@@ -758,17 +838,49 @@ export function SessionList(props: {
         () => groupSessionsByDirectory(allSessions),
         [allSessions]
     )
-    const groups = useMemo(
-        () => groupSessionsByDirectory(visibleSessions),
-        [visibleSessions]
+    // Top-level time/state buckets. Each bucket re-uses the existing
+    // machine → project → session grouping for its own sessions, so all the
+    // upstream status/queued/preview behaviour is preserved inside a bucket.
+    const buckets = useMemo(
+        () => bucketizeSessions(visibleSessions).map(({ bucket, sessions }) => ({
+            bucket,
+            machineGroups: groupByMachine(groupSessionsByDirectory(sessions), resolveMachineLabel)
+        })),
+        [visibleSessions, machineLabelsById] // eslint-disable-line react-hooks/exhaustive-deps
+    )
+    const totalProjectCount = useMemo(() => {
+        const directories = new Set<string>()
+        for (const g of allGroups) directories.add(g.key)
+        return directories.size
+    }, [allGroups])
+
+    const [bucketCollapseOverrides, setBucketCollapseOverrides] = useState<Map<BucketKey, boolean>>(
+        () => new Map()
     )
     const [collapseOverrides, setCollapseOverrides] = useState<Map<string, boolean>>(
         () => new Map()
     )
     const autoExpandedSelectedSessionKeyRef = useRef<string | null>(null)
-    const isGroupCollapsed = (group: SessionGroup): boolean => {
+
+    const isBucketCollapsed = (bucket: BucketKey): boolean => {
         if (isSearching) return false
-        const override = collapseOverrides.get(group.key)
+        const override = bucketCollapseOverrides.get(bucket)
+        if (override !== undefined) return override
+        return !BUCKET_DEFAULT_EXPANDED[bucket]
+    }
+
+    const toggleBucket = (bucket: BucketKey, isCollapsed: boolean) => {
+        setBucketCollapseOverrides(prev => {
+            const next = new Map(prev)
+            next.set(bucket, !isCollapsed)
+            return next
+        })
+    }
+
+    const isGroupCollapsed = (bucket: BucketKey, group: SessionGroup): boolean => {
+        if (isSearching) return false
+        const key = `${bucket}::${group.key}`
+        const override = collapseOverrides.get(key)
         if (override !== undefined) return override
         const hasSelectedSession = selectedSessionId
             ? group.sessions.some(session => session.id === selectedSessionId)
@@ -776,25 +888,26 @@ export function SessionList(props: {
         return !group.hasActiveSession && !hasSelectedSession
     }
 
-    const toggleGroup = (groupKey: string, isCollapsed: boolean) => {
+    const toggleGroup = (bucket: BucketKey, groupKey: string, isCollapsed: boolean) => {
+        const key = `${bucket}::${groupKey}`
         setCollapseOverrides(prev => {
             const next = new Map(prev)
-            next.set(groupKey, !isCollapsed)
+            next.set(key, !isCollapsed)
             return next
         })
     }
 
-    const isSessionGroupExpanded = (group: SessionGroup): boolean => {
+    const isSessionGroupExpanded = (bucket: BucketKey, group: SessionGroup): boolean => {
         if (isSearching || group.sessions.length <= sessionPreviewLimit) return true
-        const key = `sessions::${group.key}`
+        const key = `sessions::${bucket}::${group.key}`
         const override = collapseOverrides.get(key)
         if (override !== undefined) return !override
         return false
     }
 
-    const toggleSessionGroup = (group: SessionGroup) => {
-        const key = `sessions::${group.key}`
-        const expanded = isSessionGroupExpanded(group)
+    const toggleSessionGroup = (bucket: BucketKey, group: SessionGroup) => {
+        const key = `sessions::${bucket}::${group.key}`
+        const expanded = isSessionGroupExpanded(bucket, group)
         setCollapseOverrides(prev => {
             const next = new Map(prev)
             next.set(key, expanded)
@@ -802,25 +915,20 @@ export function SessionList(props: {
         })
     }
 
-    const getVisibleGroupSessions = (group: SessionGroup): SessionSummary[] => {
+    const getVisibleGroupSessions = (bucket: BucketKey, group: SessionGroup): SessionSummary[] => {
         return getVisibleSessionPreview(
             group.sessions,
             {
-                expanded: isSessionGroupExpanded(group),
+                expanded: isSessionGroupExpanded(bucket, group),
                 selectedSessionId,
                 limit: sessionPreviewLimit
             }
         )
     }
 
-    const machineGroups = useMemo(
-        () => groupByMachine(groups, resolveMachineLabel),
-        [groups, machineLabelsById] // eslint-disable-line react-hooks/exhaustive-deps
-    )
-
-    const isMachineCollapsed = (mg: MachineGroup): boolean => {
+    const isMachineCollapsed = (bucket: BucketKey, mg: MachineGroup): boolean => {
         if (isSearching) return false
-        const key = `machine::${mg.machineId ?? UNKNOWN_MACHINE_ID}`
+        const key = `machine::${bucket}::${mg.machineId ?? UNKNOWN_MACHINE_ID}`
         const override = collapseOverrides.get(key)
         if (override !== undefined) return override
         const hasSelected = selectedSessionId
@@ -829,9 +937,9 @@ export function SessionList(props: {
         return !mg.hasActiveSession && !hasSelected
     }
 
-    const toggleMachine = (mg: MachineGroup) => {
-        const key = `machine::${mg.machineId ?? UNKNOWN_MACHINE_ID}`
-        const current = isMachineCollapsed(mg)
+    const toggleMachine = (bucket: BucketKey, mg: MachineGroup) => {
+        const key = `machine::${bucket}::${mg.machineId ?? UNKNOWN_MACHINE_ID}`
+        const current = isMachineCollapsed(bucket, mg)
         setCollapseOverrides(prev => {
             const next = new Map(prev)
             next.set(key, !current)
@@ -839,7 +947,7 @@ export function SessionList(props: {
         })
     }
 
-    // Auto-expand group (and machine) containing the selected session only when
+    // Auto-expand bucket/group/machine containing the selected session only when
     // the selected-session/group pair changes. Without this guard, every live
     // session-list refresh (for example tool-call updates from a running selected
     // session) reopens a path the user just collapsed.
@@ -849,17 +957,33 @@ export function SessionList(props: {
             return
         }
 
+        const selectedSession = allSessions.find(s => s.id === selectedSessionId)
+        if (!selectedSession) return
+        const bucket = getBucket(selectedSession, Date.now())
+
         const group = allGroups.find(g =>
             g.sessions.some(s => s.id === selectedSessionId)
         )
         if (!group) return
 
-        const autoExpandKey = `${selectedSessionId}::${group.key}`
+        const autoExpandKey = `${selectedSessionId}::${bucket}::${group.key}`
         if (autoExpandedSelectedSessionKeyRef.current === autoExpandKey) return
         autoExpandedSelectedSessionKeyRef.current = autoExpandKey
 
-        setCollapseOverrides(prev => expandSelectedSessionCollapseOverrides(prev, group))
-    }, [selectedSessionId, allGroups])
+        setBucketCollapseOverrides(prev => {
+            if (prev.get(bucket) === false || (prev.get(bucket) === undefined && BUCKET_DEFAULT_EXPANDED[bucket])) {
+                return prev
+            }
+            const next = new Map(prev)
+            next.set(bucket, false)
+            return next
+        })
+        setCollapseOverrides(prev => expandSelectedSessionCollapseOverrides(
+            prev,
+            { key: `${bucket}::${group.key}`, machineId: group.machineId },
+            bucket
+        ))
+    }, [selectedSessionId, allGroups, allSessions])
 
     // Clean up stale collapse overrides
     useEffect(() => {
@@ -867,10 +991,12 @@ export function SessionList(props: {
             if (prev.size === 0) return prev
             const next = new Map(prev)
             const knownKeys = new Set<string>()
-            for (const g of allGroups) {
-                knownKeys.add(g.key)
-                knownKeys.add(`sessions::${g.key}`)
-                knownKeys.add(`machine::${g.machineId ?? UNKNOWN_MACHINE_ID}`)
+            for (const bucket of BUCKET_ORDER) {
+                for (const g of allGroups) {
+                    knownKeys.add(`${bucket}::${g.key}`)
+                    knownKeys.add(`sessions::${bucket}::${g.key}`)
+                    knownKeys.add(`machine::${bucket}::${g.machineId ?? UNKNOWN_MACHINE_ID}`)
+                }
             }
             let changed = false
             for (const key of next.keys()) {
@@ -890,7 +1016,7 @@ export function SessionList(props: {
                     <div className="text-xs text-[var(--app-hint)]">
                         {isSearching
                             ? t('sessions.search.count', { n: visibleSessions.length, total: allSessions.length })
-                            : t('sessions.count', { n: props.sessions.length, m: allGroups.length })}
+                            : t('sessions.count', { n: props.sessions.length, m: totalProjectCount })}
                     </div>
                     <button
                         type="button"
@@ -921,101 +1047,129 @@ export function SessionList(props: {
             ) : null}
 
             <div className="flex flex-col gap-3 px-2 pt-1 pb-2">
-                {machineGroups.map((mg) => {
-                    const machineCollapsed = isMachineCollapsed(mg)
+                {buckets.map(({ bucket, machineGroups }) => {
+                    const bucketCollapsed = isBucketCollapsed(bucket)
+                    const bucketSessionCount = machineGroups.reduce((n, mg) => n + mg.totalSessions, 0)
                     return (
-                        <div key={mg.machineId ?? UNKNOWN_MACHINE_ID}>
-                            {/* Level 1: Machine */}
+                        <div key={bucket}>
+                            {/* Level 0: Bucket */}
                             <button
                                 type="button"
-                                onClick={() => toggleMachine(mg)}
+                                onClick={() => toggleBucket(bucket, bucketCollapsed)}
                                 className="flex w-full items-center gap-2 px-1 py-1.5 text-left rounded-lg transition-colors hover:bg-[var(--app-subtle-bg)] select-none"
                             >
-                                <ChevronIcon className="h-4 w-4 text-[var(--app-hint)] shrink-0" collapsed={machineCollapsed} />
-                                <MachineIcon className="h-4 w-4 text-[var(--app-hint)] shrink-0" />
-                                <span className="text-sm font-semibold truncate flex-1">{mg.label}</span>
-                                <span className="text-[11px] tabular-nums text-[var(--app-hint)] shrink-0">({mg.totalSessions})</span>
+                                <ChevronIcon className="h-4 w-4 text-[var(--app-hint)] shrink-0" collapsed={bucketCollapsed} />
+                                <span className="text-xs font-semibold uppercase tracking-wide text-[var(--app-fg)] flex-1">
+                                    {t(`sessions.bucket.${bucket}`)}
+                                </span>
+                                <span className="text-[11px] tabular-nums text-[var(--app-hint)] shrink-0">({bucketSessionCount})</span>
                             </button>
 
-                            {/* Level 2: Projects */}
-                            <div className="collapsible-panel" data-open={!machineCollapsed || undefined}>
+                            {/* Level 1: Machines */}
+                            <div className="collapsible-panel" data-open={!bucketCollapsed || undefined}>
                                 <div className="collapsible-inner">
-                                <div className="flex flex-col ml-3.5 pl-1 mt-0.5">
-                                    {mg.projectGroups.map((group) => {
-                                        const isCollapsed = isGroupCollapsed(group)
-                                        const visibleGroupSessions = getVisibleGroupSessions(group)
-                                        const hiddenSessionCount = group.sessions.length - visibleGroupSessions.length
-                                        const sessionGroupExpanded = isSessionGroupExpanded(group)
-                                        const canStartInGroupDirectory = group.directory !== 'Other'
-                                        return (
-                                            <div key={group.key}>
-                                                <div
-                                                    className="group/project sticky top-0 z-10 flex items-center gap-2 px-1 py-1.5 text-left rounded-lg transition-colors hover:bg-[var(--app-subtle-bg)] cursor-pointer min-w-0 w-full select-none"
-                                                    onClick={() => toggleGroup(group.key, isCollapsed)}
-                                                    title={group.directory}
-                                                >
-                                                    <ChevronIcon className="h-3.5 w-3.5 text-[var(--app-hint)] shrink-0" collapsed={isCollapsed} />
-                                                    <span className="font-medium text-sm truncate flex-1">
-                                                        {group.displayName}
-                                                    </span>
-                                                    <CopyPathButton path={group.directory} className="opacity-0 group-hover/project:opacity-100 transition-opacity duration-150" />
-                                                    {onNewSessionInDirectory && canStartInGroupDirectory ? (
-                                                        <button
-                                                            type="button"
-                                                            onClick={(event) => {
-                                                                event.stopPropagation()
-                                                                onNewSessionInDirectory({
-                                                                    machineId: group.machineId,
-                                                                    directory: group.directory
-                                                                })
-                                                            }}
-                                                            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[var(--app-hint)] opacity-70 transition-colors hover:bg-[var(--app-secondary-bg)] hover:text-[var(--app-link)] hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-link)]"
-                                                            title={t('sessions.group.new')}
-                                                            aria-label={t('sessions.group.new')}
-                                                        >
-                                                            <PlusIcon className="h-3.5 w-3.5" />
-                                                        </button>
-                                                    ) : null}
-                                                    <span className="text-[11px] tabular-nums text-[var(--app-hint)] shrink-0">
-                                                        ({group.sessions.length})
-                                                    </span>
-                                                </div>
+                                <div className="flex flex-col gap-3 ml-3.5 pl-1 mt-0.5">
+                                {machineGroups.map((mg) => {
+                                    const machineCollapsed = isMachineCollapsed(bucket, mg)
+                                    return (
+                                        <div key={mg.machineId ?? UNKNOWN_MACHINE_ID}>
+                                            {/* Level 1: Machine */}
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleMachine(bucket, mg)}
+                                                className="flex w-full items-center gap-2 px-1 py-1.5 text-left rounded-lg transition-colors hover:bg-[var(--app-subtle-bg)] select-none"
+                                            >
+                                                <ChevronIcon className="h-4 w-4 text-[var(--app-hint)] shrink-0" collapsed={machineCollapsed} />
+                                                <MachineIcon className="h-4 w-4 text-[var(--app-hint)] shrink-0" />
+                                                <span className="text-sm font-semibold truncate flex-1">{mg.label}</span>
+                                                <span className="text-[11px] tabular-nums text-[var(--app-hint)] shrink-0">({mg.totalSessions})</span>
+                                            </button>
 
-                                                {/* Level 3: Sessions */}
-                                                <div className="collapsible-panel" data-open={!isCollapsed || undefined}>
-                                                    <div className="collapsible-inner">
-                                                    <div className="flex flex-col gap-0.5 ml-3 pl-1 pr-1 py-1">
-                                                        {visibleGroupSessions.map((s) => (
-                                                            <SessionItem
-                                                                key={s.id}
-                                                                session={s}
-                                                                onSelect={props.onSelect}
-                                                                showPath={false}
-                                                                api={api}
-                                                                selected={s.id === selectedSessionId}
-                                                                showDetailedStatus={showDetailedStatus}
-                                                            />
-                                                        ))}
-                                                        {!isSearching && group.sessions.length > sessionPreviewLimit && (sessionGroupExpanded || hiddenSessionCount > 0) ? (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => toggleSessionGroup(group)}
-                                                                className={cn(
-                                                                    'mx-2 my-1 rounded-md px-2 py-1 text-left text-xs text-[var(--app-hint)] transition-colors hover:bg-[var(--app-subtle-bg)] hover:text-[var(--app-fg)]',
-                                                                    hiddenSessionCount > 0 && 'border border-dashed border-[var(--app-border)]'
-                                                                )}
-                                                            >
-                                                                {sessionGroupExpanded
-                                                                    ? t('sessions.group.showLess')
-                                                                    : t('sessions.group.showMore', { n: hiddenSessionCount })}
-                                                            </button>
-                                                        ) : null}
-                                                    </div>
-                                                    </div>
+                                            {/* Level 2: Projects */}
+                                            <div className="collapsible-panel" data-open={!machineCollapsed || undefined}>
+                                                <div className="collapsible-inner">
+                                                <div className="flex flex-col ml-3.5 pl-1 mt-0.5">
+                                                    {mg.projectGroups.map((group) => {
+                                                        const isCollapsed = isGroupCollapsed(bucket, group)
+                                                        const visibleGroupSessions = getVisibleGroupSessions(bucket, group)
+                                                        const hiddenSessionCount = group.sessions.length - visibleGroupSessions.length
+                                                        const sessionGroupExpanded = isSessionGroupExpanded(bucket, group)
+                                                        const canStartInGroupDirectory = group.directory !== 'Other'
+                                                        return (
+                                                            <div key={group.key}>
+                                                                <div
+                                                                    className="group/project sticky top-0 z-10 flex items-center gap-2 px-1 py-1.5 text-left rounded-lg transition-colors hover:bg-[var(--app-subtle-bg)] cursor-pointer min-w-0 w-full select-none"
+                                                                    onClick={() => toggleGroup(bucket, group.key, isCollapsed)}
+                                                                    title={group.directory}
+                                                                >
+                                                                    <ChevronIcon className="h-3.5 w-3.5 text-[var(--app-hint)] shrink-0" collapsed={isCollapsed} />
+                                                                    <span className="font-medium text-sm truncate flex-1">
+                                                                        {group.displayName}
+                                                                    </span>
+                                                                    <CopyPathButton path={group.directory} className="opacity-0 group-hover/project:opacity-100 transition-opacity duration-150" />
+                                                                    {onNewSessionInDirectory && canStartInGroupDirectory ? (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={(event) => {
+                                                                                event.stopPropagation()
+                                                                                onNewSessionInDirectory({
+                                                                                    machineId: group.machineId,
+                                                                                    directory: group.directory
+                                                                                })
+                                                                            }}
+                                                                            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[var(--app-hint)] opacity-70 transition-colors hover:bg-[var(--app-secondary-bg)] hover:text-[var(--app-link)] hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-link)]"
+                                                                            title={t('sessions.group.new')}
+                                                                            aria-label={t('sessions.group.new')}
+                                                                        >
+                                                                            <PlusIcon className="h-3.5 w-3.5" />
+                                                                        </button>
+                                                                    ) : null}
+                                                                    <span className="text-[11px] tabular-nums text-[var(--app-hint)] shrink-0">
+                                                                        ({group.sessions.length})
+                                                                    </span>
+                                                                </div>
+
+                                                                {/* Level 3: Sessions */}
+                                                                <div className="collapsible-panel" data-open={!isCollapsed || undefined}>
+                                                                    <div className="collapsible-inner">
+                                                                    <div className="flex flex-col gap-0.5 ml-3 pl-1 pr-1 py-1">
+                                                                        {visibleGroupSessions.map((s) => (
+                                                                            <SessionItem
+                                                                                key={s.id}
+                                                                                session={s}
+                                                                                onSelect={props.onSelect}
+                                                                                showPath={false}
+                                                                                api={api}
+                                                                                selected={s.id === selectedSessionId}
+                                                                                showDetailedStatus={showDetailedStatus}
+                                                                            />
+                                                                        ))}
+                                                                        {!isSearching && group.sessions.length > sessionPreviewLimit && (sessionGroupExpanded || hiddenSessionCount > 0) ? (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => toggleSessionGroup(bucket, group)}
+                                                                                className={cn(
+                                                                                    'mx-2 my-1 rounded-md px-2 py-1 text-left text-xs text-[var(--app-hint)] transition-colors hover:bg-[var(--app-subtle-bg)] hover:text-[var(--app-fg)]',
+                                                                                    hiddenSessionCount > 0 && 'border border-dashed border-[var(--app-border)]'
+                                                                                )}
+                                                                            >
+                                                                                {sessionGroupExpanded
+                                                                                    ? t('sessions.group.showLess')
+                                                                                    : t('sessions.group.showMore', { n: hiddenSessionCount })}
+                                                                            </button>
+                                                                        ) : null}
+                                                                    </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        )
+                                                    })}
+                                                </div>
                                                 </div>
                                             </div>
-                                        )
-                                    })}
+                                        </div>
+                                    )
+                                })}
                                 </div>
                                 </div>
                             </div>

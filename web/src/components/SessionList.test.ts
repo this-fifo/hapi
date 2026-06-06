@@ -16,6 +16,7 @@ function makeSession(overrides: Partial<SessionSummary> & { id: string }): Sessi
         futureScheduledMessageCount: 0,
         model: null,
         effort: null,
+        archivedAt: null,
         ...overrides
     }
 }

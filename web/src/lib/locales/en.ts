@@ -42,6 +42,12 @@ export default {
   // Sessions page
   'sessions.count': '{n} sessions in {m} projects',
   'sessions.new': 'New Session',
+  'sessions.showArchived': 'Show archived',
+  'sessions.bucket.active': 'Active',
+  'sessions.bucket.recent': 'Recent · last 7d',
+  'sessions.bucket.thisMonth': 'This month · 7-30d',
+  'sessions.bucket.older': 'Older',
+  'sessions.bucket.archived': 'Archived',
   'sessions.empty.title': 'No sessions yet',
   'sessions.empty.hint': 'Start a coding session in any folder under your workspace, or browse the tree first.',
   'sessions.empty.startSession': 'Start a session',
@@ -133,6 +139,7 @@ export default {
   'session.action.rename': 'Rename',
   'session.action.export': 'Export conversation',
   'session.action.archive': 'Archive',
+  'session.action.unarchive': 'Unarchive',
   'session.action.delete': 'Delete',
   'session.action.copy': 'Copy',
 
@@ -155,6 +162,12 @@ export default {
   'dialog.delete.confirm': 'Delete',
   'dialog.delete.confirming': 'Deleting…',
   'dialog.error.default': 'Operation failed. Please try again.',
+
+  // Toasts
+  'toast.archived.title': 'Archived',
+  'toast.archived.undo': 'Undo',
+  'toast.unarchived.title': 'Unarchived',
+  'toast.unarchived.undo': 'Undo',
 
   // Session export
   'session.export.title': 'Export conversation',
@@ -579,6 +592,18 @@ export default {
   'settings.voice.session.label': 'Session behavior',
   'settings.voice.proactive': 'Start voice session with summary',
   'settings.voice.proactive.description': 'When on, starting a voice session opens with a spoken summary of current agent activity. When off, the assistant greets you and waits for you to speak.',
+  'settings.maintenance.title': 'Maintenance',
+  'settings.maintenance.autoArchiveIdle': 'Auto-archive idle sessions',
+  'settings.maintenance.autoDeleteArchived': 'Auto-delete archived sessions',
+  'settings.maintenance.daysSuffix': 'days',
+  'settings.maintenance.off': 'off',
+  'settings.maintenance.dbSize': 'Database size',
+  'settings.maintenance.activeCount': 'Active sessions',
+  'settings.maintenance.archivedCount': 'Archived sessions',
+  'settings.maintenance.vacuum': 'Compact (VACUUM)',
+  'settings.maintenance.vacuumDone': 'Compacted',
+  'settings.maintenance.vacuumDoneBody': 'New size: {size}',
+  'settings.maintenance.vacuumFailed': 'VACUUM failed',
   'settings.about.title': 'About',
   'settings.about.website': 'Website',
   'settings.about.appVersion': 'App Version',

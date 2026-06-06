@@ -99,7 +99,8 @@ export class ApiClient {
             modelReasoningEffort: raw.modelReasoningEffort,
             effort: raw.effort,
             permissionMode: raw.permissionMode,
-            collaborationMode: raw.collaborationMode
+            collaborationMode: raw.collaborationMode,
+            archivedAt: raw.archivedAt
         }
     }
 
@@ -148,7 +149,8 @@ export class ApiClient {
             modelReasoningEffort: raw.modelReasoningEffort,
             effort: raw.effort,
             permissionMode: raw.permissionMode,
-            collaborationMode: raw.collaborationMode
+            collaborationMode: raw.collaborationMode,
+            archivedAt: raw.archivedAt
         }
     }
 

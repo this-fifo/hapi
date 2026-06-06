@@ -20,10 +20,11 @@ export function ToastContainer() {
                     key={toast.id}
                     title={toast.title}
                     body={toast.body}
-                    className="cursor-pointer"
+                    action={toast.action}
+                    className={toast.sessionId || toast.url ? 'cursor-pointer' : ''}
                     onClick={() => {
-                        removeToast(toast.id)
                         if (toast.sessionId) {
+                            removeToast(toast.id)
                             void navigate({
                                 to: '/sessions/$sessionId',
                                 params: { sessionId: toast.sessionId }
@@ -31,6 +32,7 @@ export function ToastContainer() {
                             return
                         }
                         if (toast.url) {
+                            removeToast(toast.id)
                             void navigate({ to: toast.url })
                         }
                     }}

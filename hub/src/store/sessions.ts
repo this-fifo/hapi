@@ -26,6 +26,7 @@ type DbSessionRow = {
     active: number
     active_at: number | null
     seq: number
+    archived_at: number | null
 }
 
 function toStoredSession(row: DbSessionRow): StoredSession {
@@ -49,7 +50,8 @@ function toStoredSession(row: DbSessionRow): StoredSession {
         teamStateUpdatedAt: row.team_state_updated_at,
         active: row.active === 1,
         activeAt: row.active_at,
-        seq: row.seq
+        seq: row.seq,
+        archivedAt: row.archived_at
     }
 }
 
@@ -380,16 +382,72 @@ export function getSessionByNamespace(db: Database, id: string, namespace: strin
     return row ? toStoredSession(row) : null
 }
 
-export function getSessions(db: Database): StoredSession[] {
-    const rows = db.prepare('SELECT * FROM sessions ORDER BY updated_at DESC').all() as DbSessionRow[]
+export function getSessions(db: Database, opts?: { includeArchived?: boolean }): StoredSession[] {
+    const sql = opts?.includeArchived
+        ? 'SELECT * FROM sessions ORDER BY updated_at DESC'
+        : 'SELECT * FROM sessions WHERE archived_at IS NULL ORDER BY updated_at DESC'
+    const rows = db.prepare(sql).all() as DbSessionRow[]
     return rows.map(toStoredSession)
 }
 
-export function getSessionsByNamespace(db: Database, namespace: string): StoredSession[] {
-    const rows = db.prepare(
-        'SELECT * FROM sessions WHERE namespace = ? ORDER BY updated_at DESC'
-    ).all(namespace) as DbSessionRow[]
+export function getSessionsByNamespace(
+    db: Database,
+    namespace: string,
+    opts?: { includeArchived?: boolean }
+): StoredSession[] {
+    const sql = opts?.includeArchived
+        ? 'SELECT * FROM sessions WHERE namespace = ? ORDER BY updated_at DESC'
+        : 'SELECT * FROM sessions WHERE namespace = ? AND archived_at IS NULL ORDER BY updated_at DESC'
+    const rows = db.prepare(sql).all(namespace) as DbSessionRow[]
     return rows.map(toStoredSession)
+}
+
+export function archiveSession(db: Database, id: string, namespace: string): boolean {
+    const now = Date.now()
+    const result = db.prepare(
+        'UPDATE sessions SET archived_at = ? WHERE id = ? AND namespace = ? AND archived_at IS NULL'
+    ).run(now, id, namespace)
+    return result.changes > 0
+}
+
+export function unarchiveSession(db: Database, id: string, namespace: string): boolean {
+    const result = db.prepare(
+        'UPDATE sessions SET archived_at = NULL WHERE id = ? AND namespace = ? AND archived_at IS NOT NULL'
+    ).run(id, namespace)
+    return result.changes > 0
+}
+
+export function bulkArchiveIdle(
+    db: Database,
+    namespace: string,
+    updatedBeforeMs: number
+): string[] {
+    const now = Date.now()
+    const rows = db.prepare(
+        'SELECT id FROM sessions WHERE namespace = ? AND archived_at IS NULL AND active = 0 AND updated_at < ?'
+    ).all(namespace, updatedBeforeMs) as Array<{ id: string }>
+    if (rows.length === 0) return []
+    const placeholders = rows.map(() => '?').join(', ')
+    db.prepare(
+        `UPDATE sessions SET archived_at = ? WHERE id IN (${placeholders})`
+    ).run(now, ...rows.map((r) => r.id))
+    return rows.map((r) => r.id)
+}
+
+export function deleteArchivedOlderThan(
+    db: Database,
+    namespace: string,
+    archivedBeforeMs: number
+): string[] {
+    const rows = db.prepare(
+        'SELECT id FROM sessions WHERE namespace = ? AND archived_at IS NOT NULL AND archived_at < ?'
+    ).all(namespace, archivedBeforeMs) as Array<{ id: string }>
+    if (rows.length === 0) return []
+    const placeholders = rows.map(() => '?').join(', ')
+    db.prepare(
+        `DELETE FROM sessions WHERE id IN (${placeholders})`
+    ).run(...rows.map((r) => r.id))
+    return rows.map((r) => r.id)
 }
 
 export function deleteSession(db: Database, id: string, namespace: string): boolean {

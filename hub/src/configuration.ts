@@ -90,6 +90,12 @@ class Configuration {
     /** Allowed CORS origins for Mini App + Socket.IO (comma-separated env override) */
     public readonly corsOrigins: string[]
 
+    /** Auto-archive idle sessions after N days (null = off) — user-configurable via Settings */
+    public autoArchiveIdleDays: number | null
+
+    /** Auto-delete archived sessions after N days (null = off) — user-configurable via Settings */
+    public autoDeleteArchivedDays: number | null
+
     /** Sources of each configuration value */
     public readonly sources: ConfigSources
 
@@ -114,6 +120,8 @@ class Configuration {
         this.listenPort = serverSettings.listenPort
         this.publicUrl = serverSettings.publicUrl
         this.corsOrigins = serverSettings.corsOrigins
+        this.autoArchiveIdleDays = serverSettings.autoArchiveIdleDays
+        this.autoDeleteArchivedDays = serverSettings.autoDeleteArchivedDays
 
         // CLI API token - will be set by _setCliApiToken() before create() returns
         this.cliApiToken = ''

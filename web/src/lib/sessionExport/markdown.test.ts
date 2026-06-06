@@ -29,7 +29,8 @@ function makeExport(messages: HapiSessionExport['messages']): HapiSessionExport 
             modelReasoningEffort: null,
             effort: null,
             permissionMode: 'default',
-            collaborationMode: 'default'
+            collaborationMode: 'default',
+            archivedAt: null
         },
         messages
     }

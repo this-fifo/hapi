@@ -3,19 +3,20 @@ import type { ApiClient } from '@/api/client'
 import type { SessionSummary } from '@/types/api'
 import { queryKeys } from '@/lib/query-keys'
 
-export function useSessions(api: ApiClient | null): {
+export function useSessions(api: ApiClient | null, opts?: { showArchived?: boolean }): {
     sessions: SessionSummary[]
     isLoading: boolean
     error: string | null
     refetch: () => Promise<unknown>
 } {
+    const showArchived = opts?.showArchived === true
     const query = useQuery({
-        queryKey: queryKeys.sessions,
+        queryKey: showArchived ? [...queryKeys.sessions, 'archived'] : queryKeys.sessions,
         queryFn: async () => {
             if (!api) {
                 throw new Error('API unavailable')
             }
-            return await api.getSessions()
+            return await api.getSessions({ showArchived })
         },
         enabled: Boolean(api),
     })

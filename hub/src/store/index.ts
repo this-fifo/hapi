@@ -23,7 +23,7 @@ export { PushStore } from './pushStore'
 export { SessionStore } from './sessionStore'
 export { UserStore } from './userStore'
 
-const SCHEMA_VERSION: number = 9
+const SCHEMA_VERSION: number = 10
 const REQUIRED_TABLES = [
     'sessions',
     'machines',
@@ -114,6 +114,7 @@ export class Store {
             6: () => this.migrateFromV6ToV7(),
             7: () => this.migrateFromV7ToV8(),
             8: () => this.migrateFromV8ToV9(),
+            9: () => this.migrateFromV9ToV10(),
         })
 
         if (currentVersion === 0) {
@@ -181,7 +182,8 @@ export class Store {
                 team_state_updated_at INTEGER,
                 active INTEGER DEFAULT 0,
                 active_at INTEGER,
-                seq INTEGER DEFAULT 0
+                seq INTEGER DEFAULT 0,
+                archived_at INTEGER
             );
             CREATE INDEX IF NOT EXISTS idx_sessions_tag ON sessions(tag);
             CREATE INDEX IF NOT EXISTS idx_sessions_tag_namespace ON sessions(tag, namespace);
@@ -414,6 +416,16 @@ export class Store {
                 ON messages(scheduled_at)
                 WHERE scheduled_at IS NOT NULL AND invoked_at IS NULL
         `)
+    }
+
+    private migrateFromV9ToV10(): void {
+        const columns = this.getSessionColumnNames()
+        // No sessions table yet (legacy branch) — createSchema builds the
+        // up-to-date table with archived_at later.
+        if (columns.size === 0) return
+        if (!columns.has('archived_at')) {
+            this.db.exec('ALTER TABLE sessions ADD COLUMN archived_at INTEGER')
+        }
     }
 
     private getSessionColumnNames(): Set<string> {

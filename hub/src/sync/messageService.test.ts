@@ -50,7 +50,8 @@ function toProtocolSession(session: ReturnType<typeof makeSession>): Session {
         modelReasoningEffort: session.modelReasoningEffort,
         effort: session.effort,
         permissionMode: 'default',
-        collaborationMode: 'default'
+        collaborationMode: 'default',
+        archivedAt: session.archivedAt
     }
 }
 

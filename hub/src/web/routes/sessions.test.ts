@@ -32,7 +32,8 @@ function createSession(overrides?: Partial<Session>): Session {
         modelReasoningEffort: null,
         effort: null,
         permissionMode: 'default',
-        collaborationMode: 'default'
+        collaborationMode: 'default',
+        archivedAt: null
     }
 
     return {
@@ -770,4 +771,68 @@ describe('sessions routes', () => {
         })
     })
 
+})
+
+function createArchiveApp(session: Session, opts?: {
+    softArchiveSession?: (sessionId: string) => boolean
+    unarchiveSession?: (sessionId: string) => boolean
+}) {
+    const softArchiveCalls: string[] = []
+    const unarchiveCalls: string[] = []
+    const engine = {
+        resolveSessionAccess: () => ({ ok: true, sessionId: session.id, session }),
+        softArchiveSession: (sessionId: string) => {
+            softArchiveCalls.push(sessionId)
+            return opts?.softArchiveSession ? opts.softArchiveSession(sessionId) : true
+        },
+        unarchiveSession: (sessionId: string) => {
+            unarchiveCalls.push(sessionId)
+            return opts?.unarchiveSession ? opts.unarchiveSession(sessionId) : true
+        }
+    } as Partial<SyncEngine>
+
+    const app = new Hono<WebAppEnv>()
+    app.use('*', async (c, next) => {
+        c.set('namespace', 'default')
+        await next()
+    })
+    app.route('/api', createSessionsRoutes(() => engine as SyncEngine))
+
+    return { app, softArchiveCalls, unarchiveCalls }
+}
+
+describe('session archive routes', () => {
+    it('soft-archives an inactive session', async () => {
+        const session = createSession({ active: false })
+        const { app, softArchiveCalls } = createArchiveApp(session)
+
+        const response = await app.request('/api/sessions/session-1/archive', { method: 'POST' })
+
+        expect(response.status).toBe(200)
+        expect(await response.json()).toEqual({ ok: true })
+        expect(softArchiveCalls).toEqual(['session-1'])
+    })
+
+    it('refuses to archive an active session with 409', async () => {
+        const session = createSession({ active: true })
+        const { app, softArchiveCalls } = createArchiveApp(session)
+
+        const response = await app.request('/api/sessions/session-1/archive', { method: 'POST' })
+
+        expect(response.status).toBe(409)
+        const body = await response.json() as { code?: string }
+        expect(body.code).toBe('session_active')
+        expect(softArchiveCalls).toEqual([])
+    })
+
+    it('unarchives a session', async () => {
+        const session = createSession({ active: false, archivedAt: Date.now() })
+        const { app, unarchiveCalls } = createArchiveApp(session)
+
+        const response = await app.request('/api/sessions/session-1/unarchive', { method: 'POST' })
+
+        expect(response.status).toBe(200)
+        expect(await response.json()).toEqual({ ok: true })
+        expect(unarchiveCalls).toEqual(['session-1'])
+    })
 })

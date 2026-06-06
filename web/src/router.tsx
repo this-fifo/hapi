@@ -124,6 +124,27 @@ function FolderOpenIcon(props: { className?: string }) {
     )
 }
 
+function EyeIcon(props: { className?: string; off?: boolean }) {
+    return (
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={props.className}
+        >
+            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+            <circle cx="12" cy="12" r="3" />
+            {props.off ? <line x1="3" y1="3" x2="21" y2="21" /> : null}
+        </svg>
+    )
+}
+
 function SettingsIcon(props: { className?: string }) {
     return (
         <svg
@@ -150,6 +171,8 @@ function getMachineTitle(machine: Machine): string {
     return machine.id.slice(0, 8)
 }
 
+const SHOW_ARCHIVED_KEY = 'hapi-show-archived'
+
 function SessionsPage() {
     const { api } = useAppContext()
     const navigate = useNavigate()
@@ -158,7 +181,23 @@ function SessionsPage() {
     const matchRoute = useMatchRoute()
     const { t } = useTranslation()
     const { addToast } = useToast()
-    const { sessions, isLoading, error, refetch } = useSessions(api)
+    const [showArchived, setShowArchived] = useState<boolean>(() => {
+        if (typeof localStorage === 'undefined') return false
+        return localStorage.getItem(SHOW_ARCHIVED_KEY) === '1'
+    })
+    const { sessions, isLoading, error, refetch } = useSessions(api, { showArchived })
+
+    const toggleShowArchived = useCallback(() => {
+        setShowArchived((prev) => {
+            const next = !prev
+            try {
+                localStorage.setItem(SHOW_ARCHIVED_KEY, next ? '1' : '0')
+            } catch {
+                // localStorage may be unavailable (private mode); ignore
+            }
+            return next
+        })
+    }, [])
     const { machines } = useMachines(api, true)
     const [isSyncingCodexSession, setIsSyncingCodexSession] = useState(false)
     const [codexSessions, setCodexSessions] = useState<CodexLocalSessionSummary[]>([])
@@ -465,6 +504,15 @@ function SessionsPage() {
                             {t('sessions.count', { n: sessions.length, m: projectCount })}
                         </div>
                         <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={toggleShowArchived}
+                                aria-pressed={showArchived}
+                                className={`p-1.5 rounded-full transition-colors hover:bg-[var(--app-subtle-bg)] ${showArchived ? 'text-[var(--app-fg)]' : 'text-[var(--app-hint)] hover:text-[var(--app-fg)]'}`}
+                                title={t('sessions.showArchived')}
+                            >
+                                <EyeIcon className="h-5 w-5" off={!showArchived} />
+                            </button>
                             <button
                                 type="button"
                                 onClick={() => void openCodexImportDialog()}

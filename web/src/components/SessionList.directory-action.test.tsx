@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import type { SessionSummary } from '@/types/api'
 import { I18nProvider } from '@/lib/i18n-context'
+import { ToastProvider } from '@/lib/toast-context'
 import { SessionList } from './SessionList'
 
 afterEach(() => cleanup())
@@ -22,6 +23,7 @@ function makeSession(overrides: Partial<SessionSummary> & { id: string }): Sessi
         futureScheduledMessageCount: 0,
         model: null,
         effort: null,
+        archivedAt: null,
         ...overrides
     }
 }
@@ -37,7 +39,9 @@ function renderWithProviders(children: ReactNode) {
     return render(
         <QueryClientProvider client={queryClient}>
             <I18nProvider>
-                {children}
+                <ToastProvider>
+                    {children}
+                </ToastProvider>
             </I18nProvider>
         </QueryClientProvider>
     )
@@ -109,24 +113,29 @@ describe('SessionList collapse behavior', () => {
                 }
             })}>
                 <I18nProvider>
-                    <SessionList
-                        sessions={sessions}
-                        selectedSessionId={selectedSessionId}
-                        onSelect={vi.fn()}
-                        onNewSession={vi.fn()}
-                        onRefresh={vi.fn()}
-                        isLoading={false}
-                        renderHeader={false}
-                        api={null}
-                    />
+                    <ToastProvider>
+                        <SessionList
+                            sessions={sessions}
+                            selectedSessionId={selectedSessionId}
+                            onSelect={vi.fn()}
+                            onNewSession={vi.fn()}
+                            onRefresh={vi.fn()}
+                            isLoading={false}
+                            renderHeader={false}
+                            api={null}
+                        />
+                    </ToastProvider>
                 </I18nProvider>
             </QueryClientProvider>
         )
     }
 
     function getProjectPanel(): Element {
-        const header = screen.getByTitle('/work/hapi')
-        const panel = header.nextElementSibling
+        // Sessions are first split into time/state buckets; the selected running
+        // session lives in the (always-first) "active" bucket, so target that
+        // bucket's project header for the collapse assertions.
+        const header = screen.getAllByTitle('/work/hapi')[0]
+        const panel = header?.nextElementSibling
         if (!panel) {
             throw new Error('Expected project collapse panel')
         }
@@ -153,7 +162,7 @@ describe('SessionList collapse behavior', () => {
 
         expect(getProjectPanel().getAttribute('data-open')).toBe('true')
 
-        fireEvent.click(screen.getByTitle('/work/hapi'))
+        fireEvent.click(screen.getAllByTitle('/work/hapi')[0]!)
         expect(getProjectPanel().getAttribute('data-open')).toBeNull()
 
         rerender(renderSessionList([
@@ -171,6 +180,8 @@ describe('SessionList collapse behavior', () => {
     })
 
     it('auto-expands the path again when the selected session changes', async () => {
+        // Both sessions are active so they share the "active" bucket's project
+        // panel; the test exercises auto-expand within a single bucket.
         const sessions = [
             makeSession({
                 id: 'session-running',
@@ -181,13 +192,14 @@ describe('SessionList collapse behavior', () => {
             }),
             makeSession({
                 id: 'session-next',
+                active: true,
                 updatedAt: 90,
                 metadata: { path: '/work/hapi', name: 'Next task', flavor: 'codex' },
             })
         ]
         const { rerender } = render(renderSessionList(sessions))
 
-        fireEvent.click(screen.getByTitle('/work/hapi'))
+        fireEvent.click(screen.getAllByTitle('/work/hapi')[0]!)
         expect(getProjectPanel().getAttribute('data-open')).toBeNull()
 
         rerender(renderSessionList(sessions, 'session-next'))

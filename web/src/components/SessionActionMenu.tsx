@@ -13,9 +13,11 @@ type SessionActionMenuProps = {
     isOpen: boolean
     onClose: () => void
     sessionActive: boolean
+    sessionArchived: boolean
     onRename: () => void
     onExport?: () => void
     onArchive: () => void
+    onUnarchive: () => void
     onDelete: () => void
     anchorPoint: { x: number; y: number }
     menuId?: string
@@ -117,10 +119,11 @@ export function SessionActionMenu(props: SessionActionMenuProps) {
     const {
         isOpen,
         onClose,
-        sessionActive,
+        sessionArchived,
         onRename,
         onExport,
         onArchive,
+        onUnarchive,
         onDelete,
         anchorPoint,
         menuId
@@ -139,6 +142,11 @@ export function SessionActionMenu(props: SessionActionMenuProps) {
     const handleArchive = () => {
         onClose()
         onArchive()
+    }
+
+    const handleUnarchive = () => {
+        onClose()
+        onUnarchive()
     }
 
     const handleExport = () => {
@@ -279,27 +287,37 @@ export function SessionActionMenu(props: SessionActionMenuProps) {
                     </button>
                 ) : null}
 
-                {sessionActive ? (
+                {sessionArchived ? (
                     <button
                         type="button"
                         role="menuitem"
-                        className={`${baseItemClassName} text-red-500 hover:bg-red-500/10`}
-                        onClick={handleArchive}
+                        className={`${baseItemClassName} hover:bg-[var(--app-subtle-bg)]`}
+                        onClick={handleUnarchive}
                     >
-                        <ArchiveIcon className="text-red-500" />
-                        {t('session.action.archive')}
+                        <ArchiveIcon className="text-[var(--app-hint)]" />
+                        {t('session.action.unarchive')}
                     </button>
                 ) : (
                     <button
                         type="button"
                         role="menuitem"
-                        className={`${baseItemClassName} text-red-500 hover:bg-red-500/10`}
-                        onClick={handleDelete}
+                        className={`${baseItemClassName} hover:bg-[var(--app-subtle-bg)]`}
+                        onClick={handleArchive}
                     >
-                        <TrashIcon className="text-red-500" />
-                        {t('session.action.delete')}
+                        <ArchiveIcon className="text-[var(--app-hint)]" />
+                        {t('session.action.archive')}
                     </button>
                 )}
+
+                <button
+                    type="button"
+                    role="menuitem"
+                    className={`${baseItemClassName} text-red-500 hover:bg-red-500/10`}
+                    onClick={handleDelete}
+                >
+                    <TrashIcon className="text-red-500" />
+                    {t('session.action.delete')}
+                </button>
             </div>
         </div>
     )

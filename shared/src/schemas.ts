@@ -208,7 +208,8 @@ export const SessionSchema = z.object({
     modelReasoningEffort: z.string().nullable().optional().default(null),
     effort: z.string().nullable().optional().default(null),
     permissionMode: PermissionModeSchema.optional(),
-    collaborationMode: CodexCollaborationModeSchema.optional()
+    collaborationMode: CodexCollaborationModeSchema.optional(),
+    archivedAt: z.number().nullable().optional().default(null)
 })
 
 export type Session = z.infer<typeof SessionSchema>
